@@ -9,6 +9,9 @@ infra/
   bootstrap/          S3 bucket for Terraform remote state (native S3 locking)
   modules/dns/        Route 53 public zone: mail records, DMARC, CAA
   live/global/dns/    The kovalov.in zone
+  live/global/github-oidc/  Keyless GitHub Actions access (gha-plan / gha-apply roles)
+docs/adr/             Architecture Decision Records
+.github/workflows/    CI: fmt, validate, plan on every PR and push to main
 ```
 
 ## Requirements
