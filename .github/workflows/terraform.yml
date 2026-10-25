@@ -1,0 +1,75 @@
+name: terraform
+
+on:
+  pull_request:
+    paths: ["infra/**", ".github/workflows/terraform.yml"]
+  push:
+    branches: [main]
+    paths: ["infra/**", ".github/workflows/terraform.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # required to request the OIDC token for AWS
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: 1.13.4
+  AWS_REGION: eu-central-1
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - run: terraform fmt -check -recursive -diff infra
+
+  plan:
+    needs: fmt
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack:
+          - infra/bootstrap
+          - infra/live/global/dns
+          - infra/live/global/github-oidc
+    defaults:
+      run:
+        working-directory: ${{ matrix.stack }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::524941137773:role/gha-plan
+          role-session-name: gha-plan-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - run: terraform init -input=false
+      - run: terraform validate
+
+      - name: terraform plan
+        run: |
+          set -o pipefail
+          terraform plan -input=false -no-color -detailed-exitcode | tee plan.txt || code=$?
+          {
+            echo "### \`${{ matrix.stack }}\`"
+            echo '```'
+            grep -E '^(Plan:|No changes)' plan.txt || tail -n 20 plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # 0 = no changes, 2 = changes present; anything else is a failure
+          [ "${code:-0}" -ne 1 ]
