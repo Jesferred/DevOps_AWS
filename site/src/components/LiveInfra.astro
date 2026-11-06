@@ -1,27 +1,50 @@
 ---
-// Deploy metadata is injected by CI at build time; the other metrics will be
-// served from /live/status.json once the monitoring stack is deployed.
+// Last deploy is baked in at build time by CI; everything else is read in the
+// browser from /live/status.json, refreshed every 5 minutes by the aggregator.
 const sha = import.meta.env.PUBLIC_DEPLOY_SHA as string | undefined;
 const deployedAt = import.meta.env.PUBLIC_DEPLOY_TIME as string | undefined;
 const runUrl = import.meta.env.PUBLIC_DEPLOY_RUN_URL as string | undefined;
 
 const deployed = deployedAt ? new Date(deployedAt) : undefined;
-
-const metrics = [
-  { label: 'Uptime (30d)', hint: 'SLO 99.9%' },
-  { label: 'Latency p95', hint: 'multi-region probes' },
-  { label: 'Cost this month', hint: 'AWS Cost Explorer' },
-];
+const card = 'rounded-xl border border-line bg-surface p-5';
 ---
 
-<section id="live" class="scroll-mt-20 py-12">
-  <div class="flex items-baseline justify-between gap-4">
+<section id="live" class="scroll-mt-20 py-12" data-live-root>
+  <div class="flex flex-wrap items-baseline justify-between gap-4">
     <h2 class="text-2xl font-semibold tracking-tight">Live infra</h2>
-    <p class="font-mono text-xs text-muted">this site, measured</p>
+    <a href="/status/" class="health-badge" data-health="unknown">
+      <span class="health-dot" aria-hidden="true"></span>
+      <span data-health-text>Collecting data</span>
+    </a>
   </div>
 
   <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-    <article class="rounded-xl border border-line bg-surface p-5">
+    <article class={card}>
+      <p class="text-sm text-muted">Uptime · 30 days</p>
+      <p class="mt-2 text-2xl font-semibold" data-live="availability.30d" data-fmt="pct">—</p>
+      <p class="mt-1 font-mono text-xs text-muted">
+        SLO <span data-live="slo.target" data-fmt="pct">99.9%</span> ·
+        budget left <span data-live="error_budget.remaining_min" data-fmt="min">—</span>
+      </p>
+    </article>
+
+    <article class={card}>
+      <p class="text-sm text-muted">Latency p95 · 24h</p>
+      <p class="mt-2 text-2xl font-semibold" data-live="latency_ms.24h.p95" data-fmt="ms">—</p>
+      <p class="mt-1 font-mono text-xs text-muted">
+        p50 <span data-live="latency_ms.24h.p50" data-fmt="ms">—</span> · 3 regions
+      </p>
+    </article>
+
+    <article class={card}>
+      <p class="text-sm text-muted">AWS cost · this month</p>
+      <p class="mt-2 text-2xl font-semibold" data-live="cost.month_to_date" data-fmt="usd">—</p>
+      <p class="mt-1 font-mono text-xs text-muted">
+        forecast <span data-live="cost.forecast_month" data-fmt="usd">—</span> · before credits
+      </p>
+    </article>
+
+    <article class={card}>
       <p class="text-sm text-muted">Last deploy</p>
       {deployed ? (
         <>
@@ -36,13 +59,22 @@ const metrics = [
         <p class="mt-2 text-2xl font-semibold text-muted">local build</p>
       )}
     </article>
-
-    {metrics.map((m) => (
-      <article class="rounded-xl border border-dashed border-line p-5">
-        <p class="text-sm text-muted">{m.label}</p>
-        <p class="mt-2 text-2xl font-semibold text-muted">—</p>
-        <p class="mt-1 font-mono text-xs text-muted">{m.hint} · coming soon</p>
-      </article>
-    ))}
   </div>
+
+  <p class="mt-4 text-right font-mono text-xs text-muted">
+    updated <span data-live="generated_at" data-fmt="ago">—</span> ·
+    <a href="/status/" class="underline underline-offset-4 hover:text-fg">SLOs, incidents & methodology →</a>
+  </p>
 </section>
+
+<script>
+  import { fill, health, loadStatus, setHealth } from '../scripts/live';
+
+  const root = document.querySelector<HTMLElement>('[data-live-root]');
+  if (root) {
+    loadStatus().then((status) => {
+      if (status) fill(root, status);
+      setHealth(root, health(status));
+    });
+  }
+</script>

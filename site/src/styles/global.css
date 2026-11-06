@@ -84,3 +84,20 @@
 .token.string, .token.attr-value { @apply text-ok; }
 .token.number, .token.constant { @apply text-warn; }
 .token.function, .token.property { @apply font-semibold; }
+
+/* Health badge: state comes from the data-health attribute set by live.ts. */
+.health-badge {
+  @apply inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 font-mono text-xs text-muted hover:text-fg;
+}
+.health-dot {
+  @apply inline-block size-2 rounded-full bg-muted;
+}
+[data-health="operational"] .health-dot { @apply bg-ok; }
+[data-health="degraded"] .health-dot { @apply bg-warn animate-pulse; }
+[data-health="stale"] .health-dot { @apply bg-warn; }
+
+/* Bars driven by data-level, never by inline style. */
+.day-ok { @apply fill-ok; }
+.day-warn { @apply fill-warn; }
+.day-bad { @apply fill-red-500; }
+.day-none { @apply fill-line; }

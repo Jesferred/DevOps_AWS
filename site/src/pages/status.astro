@@ -1,0 +1,277 @@
+---
+import Base from '../layouts/Base.astro';
+
+const card = 'rounded-xl border border-line bg-surface p-5';
+const label = 'text-sm text-muted';
+const big = 'mt-2 text-2xl font-semibold';
+const small = 'mt-1 font-mono text-xs text-muted';
+---
+
+<Base title="Status · kovalov.in" description="Live SLOs, error budget, latency, incidents and cost of kovalov.in.">
+  <div class="py-16" data-status-root>
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p class="font-mono text-sm text-accent">$ curl kovalov.in/live/status.json</p>
+        <h1 class="mt-3 text-4xl font-bold tracking-tight">Status</h1>
+      </div>
+      <p class="health-badge" data-health="unknown">
+        <span class="health-dot" aria-hidden="true"></span>
+        <span data-health-text>Collecting data</span>
+      </p>
+    </div>
+    <p class="mt-3 font-mono text-xs text-muted">
+      updated <span data-live="generated_at" data-fmt="ago">—</span> ·
+      30-day data coverage <span data-live="coverage_30d" data-fmt="pct" data-digits="1">—</span>
+    </p>
+
+    <!-- SLO -->
+    <section class="mt-12">
+      <h2 class="text-2xl font-semibold tracking-tight">Availability SLO</h2>
+      <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <article class={card}>
+          <p class={label}>Objective</p>
+          <p class={big} data-live="slo.target" data-fmt="pct">99.9%</p>
+          <p class={small}>rolling 30 days · 43.2 min budget</p>
+        </article>
+        <article class={card}>
+          <p class={label}>30 days</p>
+          <p class={big} data-live="availability.30d" data-fmt="pct">—</p>
+          <p class={small}>7d <span data-live="availability.7d" data-fmt="pct">—</span></p>
+        </article>
+        <article class={card}>
+          <p class={label}>24 hours</p>
+          <p class={big} data-live="availability.24h" data-fmt="pct">—</p>
+          <p class={small}>TLS cert expires in <span data-live="tls_cert_days_left">—</span> d</p>
+        </article>
+        <article class={card}>
+          <p class={label}>Error budget left</p>
+          <p class={big} data-live="error_budget.remaining_min" data-fmt="min">—</p>
+          <svg class="mt-3 h-2 w-full" viewBox="0 0 100 2" preserveAspectRatio="none" aria-hidden="true">
+            <rect width="100" height="2" rx="1" class="fill-line" />
+            <rect width="0" height="2" rx="1" class="fill-ok" data-budget-bar />
+          </svg>
+          <p class={small}>consumed <span data-live="error_budget.consumed_min">—</span> min</p>
+        </article>
+      </div>
+
+      <h3 class="mt-10 font-semibold">Last 30 days</h3>
+      <svg class="mt-3 h-12 w-full" viewBox="0 0 300 40" preserveAspectRatio="none" role="img" aria-label="Daily availability, last 30 days" data-daily-chart></svg>
+      <div class="mt-1 flex justify-between font-mono text-xs text-muted"><span>30 days ago</span><span>today</span></div>
+
+      <h3 class="mt-10 font-semibold">Burn rate</h3>
+      <p class="mt-1 max-w-2xl text-sm text-muted">
+        How fast the error budget is being spent. 1× spends exactly the whole budget in 30 days.
+        Alerts use two windows each, so they fire fast on real outages and reset quickly once fixed.
+      </p>
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full min-w-[480px] text-left text-sm">
+          <thead class="text-muted">
+            <tr class="border-b border-line"><th class="py-2 font-normal">Window</th><th class="font-normal">Burn rate</th><th class="font-normal">Used by alert</th></tr>
+          </thead>
+          <tbody class="font-mono">
+            <tr class="border-b border-line"><td class="py-2">5 min</td><td data-live="burn_rate.5m" data-fmt="rate">—</td><td class="text-muted">fast burn, short window</td></tr>
+            <tr class="border-b border-line"><td class="py-2">1 hour</td><td data-live="burn_rate.1h" data-fmt="rate">—</td><td class="text-muted">fast burn: page when both &gt; 14.4×</td></tr>
+            <tr class="border-b border-line"><td class="py-2">30 min</td><td data-live="burn_rate.30m" data-fmt="rate">—</td><td class="text-muted">slow burn, short window</td></tr>
+            <tr class="border-b border-line"><td class="py-2">6 hours</td><td data-live="burn_rate.6h" data-fmt="rate">—</td><td class="text-muted">slow burn: ticket when both &gt; 6×</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Reliability -->
+    <section class="mt-16">
+      <h2 class="text-2xl font-semibold tracking-tight">Incidents</h2>
+      <div class="mt-6 grid gap-4 sm:grid-cols-3">
+        <article class={card}>
+          <p class={label}>Incidents · 30 days</p>
+          <p class={big} data-live="incidents.count_30d">—</p>
+        </article>
+        <article class={card}>
+          <p class={label}>MTTR</p>
+          <p class={big} data-live="incidents.mttr_min" data-fmt="min">—</p>
+          <p class={small}>mean time to recovery · 90 days</p>
+        </article>
+        <article class={card}>
+          <p class={label}>MTBF</p>
+          <p class={big} data-live="incidents.mtbf_h" data-fmt="hours">—</p>
+          <p class={small}>mean time between failures · 30 days</p>
+        </article>
+      </div>
+      <ul class="mt-6 divide-y divide-line font-mono text-sm" data-incident-list>
+        <li class="py-3 text-muted">No incidents recorded.</li>
+      </ul>
+    </section>
+
+    <!-- Latency -->
+    <section class="mt-16">
+      <h2 class="text-2xl font-semibold tracking-tight">Latency</h2>
+      <div class="mt-6 grid gap-4 sm:grid-cols-3">
+        {(['p50', 'p95', 'p99'] as const).map((q) => (
+          <article class={card}>
+            <p class={label}>{q} · 24h</p>
+            <p class={big} data-live={`latency_ms.24h.${q}`} data-fmt="ms">—</p>
+            <p class={small}>30d <span data-live={`latency_ms.30d.${q}`} data-fmt="ms">—</span></p>
+          </article>
+        ))}
+      </div>
+
+      <h3 class="mt-10 font-semibold">Where the time goes (median, 24h)</h3>
+      <svg class="mt-3 h-6 w-full" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true" data-phase-bar></svg>
+      <dl class="mt-3 grid grid-cols-2 gap-2 font-mono text-xs sm:grid-cols-4">
+        <div><dt class="text-muted">DNS</dt><dd data-live="phases_ms_24h.dns" data-fmt="ms">—</dd></div>
+        <div><dt class="text-muted">TCP connect</dt><dd data-live="phases_ms_24h.connect" data-fmt="ms">—</dd></div>
+        <div><dt class="text-muted">TLS handshake</dt><dd data-live="phases_ms_24h.tls" data-fmt="ms">—</dd></div>
+        <div><dt class="text-muted">First byte</dt><dd data-live="phases_ms_24h.ttfb" data-fmt="ms">—</dd></div>
+      </dl>
+
+      <h3 class="mt-10 font-semibold">Probe locations</h3>
+      <div class="mt-3 overflow-x-auto">
+        <table class="w-full min-w-[520px] text-left text-sm">
+          <thead class="text-muted">
+            <tr class="border-b border-line">
+              <th class="py-2 font-normal">Region</th><th class="font-normal">Last probe</th><th class="font-normal">Latency</th>
+              <th class="font-normal">p95 · 24h</th><th class="font-normal">Success · 24h</th>
+            </tr>
+          </thead>
+          <tbody class="font-mono" data-region-rows></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Cost -->
+    <section class="mt-16">
+      <h2 class="text-2xl font-semibold tracking-tight">Cost</h2>
+      <div class="mt-6 grid gap-4 sm:grid-cols-2">
+        <article class={card}>
+          <p class={label}>Month to date</p>
+          <p class={big} data-live="cost.month_to_date" data-fmt="usd">—</p>
+          <p class={small}>updated <span data-live="cost.updated_at" data-fmt="ago">—</span></p>
+        </article>
+        <article class={card}>
+          <p class={label}>Forecast · full month</p>
+          <p class={big} data-live="cost.forecast_month" data-fmt="usd">—</p>
+          <p class={small}>AWS Cost Explorer · usage before credits</p>
+        </article>
+      </div>
+      <table class="mt-6 w-full text-left text-sm">
+        <tbody class="font-mono" data-cost-rows></tbody>
+      </table>
+    </section>
+
+    <!-- Methodology -->
+    <section class="prose mt-16 max-w-3xl">
+      <h2>Methodology</h2>
+      <ul>
+        <li>
+          <strong>SLI.</strong> Synthetic HTTPS probes run every minute from Frankfurt, N. Virginia and Singapore.
+          Each one does DNS, TCP and TLS from scratch and passes only on <code>HTTP 200</code> with a valid certificate.
+        </li>
+        <li>
+          <strong>Good and bad minutes.</strong> A minute counts when at least two regions reported. It is bad when a
+          majority of them failed, so one flaky probe location cannot spend the budget on its own.
+        </li>
+        <li>
+          <strong>SLO.</strong> 99.9% of evaluated minutes over a rolling 30 days. The 0.1% left over is the error
+          budget: 43.2 minutes.
+        </li>
+        <li>
+          <strong>Alerting.</strong> Multi-window, multi-burn-rate alerts from the Google SRE Workbook. A page fires when
+          the 1-hour and 5-minute burn rates are both above 14.4× (2% of the budget gone in an hour). A ticket fires when the
+          6-hour and 30-minute rates are both above 6×. A watchdog also alerts if the probes stop reporting.
+        </li>
+        <li>
+          <strong>Incidents</strong> start at the first bad minute and end after two consecutive good ones. MTTR is their
+          mean duration and MTBF is uptime divided by the number of incidents.
+        </li>
+        <li>
+          <strong>Percentiles.</strong> 24-hour values are exact. 30-day values are interpolated from per-day latency
+          histograms, the same way Prometheus <code>histogram_quantile</code> works.
+        </li>
+        <li>
+          <strong>Cost</strong> is read once a day from AWS Cost Explorer. Each API call costs $0.01, so it is never
+          queried per page view.
+        </li>
+      </ul>
+    </section>
+  </div>
+</Base>
+
+<script>
+  import { el, fill, fmt, health, loadStatus, setHealth, svg, type Status } from '../scripts/live';
+
+  const root = document.querySelector<HTMLElement>('[data-status-root]')!;
+
+  function render(s: Status) {
+    fill(root, s);
+    root.querySelector('[data-live="coverage_30d"]')!.textContent = fmt.pct(s.coverage_30d, 1);
+
+    const bar = root.querySelector('[data-budget-bar]');
+    const left = Math.max(0, Math.min(1, s.error_budget.remaining_ratio));
+    bar?.setAttribute('width', String(left * 100));
+    bar?.setAttribute('class', left > 0.5 ? 'fill-ok' : left > 0.2 ? 'fill-warn' : 'fill-red-500');
+
+    // 30 bars, oldest left; days without data stay grey.
+    const chart = root.querySelector('[data-daily-chart]')!;
+    const byDate = new Map(s.daily.map((d) => [d.date, d]));
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(Date.now() - (29 - i) * 86400000).toISOString().slice(0, 10);
+      const day = byDate.get(date);
+      const a = day?.availability ?? null;
+      const level = a === null ? 'none' : a >= s.slo.target ? 'ok' : a >= 0.99 ? 'warn' : 'bad';
+      const rect = svg('rect', { x: i * 10 + 1, y: 0, width: 8, height: 40, rx: 2, class: `day-${level}` });
+      const title = svg('title', {});
+      title.textContent = a === null ? `${date}: no data` : `${date}: ${fmt.pct(a)} · ${day!.bad_min} bad min · p95 ${fmt.ms(day!.p95_ms)}`;
+      rect.append(title);
+      chart.append(rect);
+    }
+
+    const phases = s.phases_ms_24h;
+    const parts = [phases.dns, phases.connect, phases.tls, phases.ttfb];
+    if (parts.every((p) => p !== null)) {
+      // Phases are cumulative timestamps from request start; draw the deltas.
+      const deltas = parts.map((p, i) => p! - (i ? parts[i - 1]! : 0));
+      const total = parts[3]!;
+      const colors = ['fill-muted', 'fill-accent', 'fill-ok', 'fill-warn'];
+      let x = 0;
+      deltas.forEach((d, i) => {
+        const w = (Math.max(0, d) / total) * 100;
+        root.querySelector('[data-phase-bar]')!.append(svg('rect', { x, y: 0, width: w, height: 6, class: colors[i] }));
+        x += w;
+      });
+    }
+
+    const rows = root.querySelector('[data-region-rows]')!;
+    for (const r of s.regions) {
+      const tr = el('tr', 'border-b border-line');
+      tr.append(
+        el('td', 'py-2', r.region),
+        el('td', r.last_ok ? 'text-ok' : 'text-warn', `${r.last_ok ? 'ok' : 'fail'} · ${fmt.ago(r.last_at)}`),
+        el('td', '', fmt.ms(r.last_ms)),
+        el('td', '', fmt.ms(r.p95_24h_ms)),
+        el('td', '', fmt.pct(r.availability_24h, 2)),
+      );
+      rows.append(tr);
+    }
+
+    const list = root.querySelector('[data-incident-list]')!;
+    if (s.incidents.recent.length) {
+      list.replaceChildren(
+        ...s.incidents.recent.map((i) =>
+          el('li', 'py-3', `${fmt.utc(i.start)} · ${i.end ? `${fmt.min(i.duration_min)}` : 'ongoing'}`),
+        ),
+      );
+    }
+
+    const costRows = root.querySelector('[data-cost-rows]')!;
+    for (const svc of s.cost?.by_service ?? []) {
+      const tr = el('tr', 'border-b border-line');
+      tr.append(el('td', 'py-2', svc.service), el('td', 'text-right', fmt.usd(svc.amount)));
+      costRows.append(tr);
+    }
+  }
+
+  loadStatus().then((s) => {
+    if (s) render(s);
+    setHealth(root, health(s));
+  });
+</script>
