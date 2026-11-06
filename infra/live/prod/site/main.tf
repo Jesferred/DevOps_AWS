@@ -126,7 +126,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "site" {
   }
 }
 
-# Versioning gives instant rollback of a bad deploy; old versions expire after 30 days.
+# Versioning gives instant rollback of a bad deploy. Old versions are expired
+# only after 90 days and only beyond the 5 most recent ones.
 resource "aws_s3_bucket_versioning" "site" {
   bucket = aws_s3_bucket.site.id
 
@@ -145,7 +146,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "site" {
     filter {}
 
     noncurrent_version_expiration {
-      noncurrent_days = 30
+      noncurrent_days           = 90
+      newer_noncurrent_versions = 5
     }
 
     abort_incomplete_multipart_upload {
