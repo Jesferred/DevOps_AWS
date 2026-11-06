@@ -1,0 +1,48 @@
+---
+// Deploy metadata is injected by CI at build time; the other metrics will be
+// served from /live/status.json once the monitoring stack is deployed.
+const sha = import.meta.env.PUBLIC_DEPLOY_SHA as string | undefined;
+const deployedAt = import.meta.env.PUBLIC_DEPLOY_TIME as string | undefined;
+const runUrl = import.meta.env.PUBLIC_DEPLOY_RUN_URL as string | undefined;
+
+const deployed = deployedAt ? new Date(deployedAt) : undefined;
+
+const metrics = [
+  { label: 'Uptime (30d)', hint: 'SLO 99.9%' },
+  { label: 'Latency p95', hint: 'multi-region probes' },
+  { label: 'Cost this month', hint: 'AWS Cost Explorer' },
+];
+---
+
+<section id="live" class="scroll-mt-20 py-12">
+  <div class="flex items-baseline justify-between gap-4">
+    <h2 class="text-2xl font-semibold tracking-tight">Live infra</h2>
+    <p class="font-mono text-xs text-muted">this site, measured</p>
+  </div>
+
+  <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <article class="rounded-xl border border-line bg-surface p-5">
+      <p class="text-sm text-muted">Last deploy</p>
+      {deployed ? (
+        <>
+          <p class="mt-2 text-2xl font-semibold">
+            <time datetime={deployed.toISOString()}>{deployed.toISOString().slice(0, 16).replace('T', ' ')} UTC</time>
+          </p>
+          <p class="mt-1 font-mono text-xs text-muted">
+            {runUrl ? <a href={runUrl} class="underline underline-offset-4 hover:text-fg">{sha?.slice(0, 7)}</a> : sha?.slice(0, 7)}
+          </p>
+        </>
+      ) : (
+        <p class="mt-2 text-2xl font-semibold text-muted">local build</p>
+      )}
+    </article>
+
+    {metrics.map((m) => (
+      <article class="rounded-xl border border-dashed border-line p-5">
+        <p class="text-sm text-muted">{m.label}</p>
+        <p class="mt-2 text-2xl font-semibold text-muted">—</p>
+        <p class="mt-1 font-mono text-xs text-muted">{m.hint} · coming soon</p>
+      </article>
+    ))}
+  </div>
+</section>

@@ -1,0 +1,96 @@
+name: site
+
+on:
+  pull_request:
+    paths: ["site/**", ".github/workflows/site.yml"]
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: site
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: site/.nvmrc
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - run: npm ci
+      - run: npm audit --audit-level=high
+
+      - name: Build
+        run: npm run build
+        env:
+          ASTRO_TELEMETRY_DISABLED: "1"
+          PUBLIC_DEPLOY_SHA: ${{ github.sha }}
+          PUBLIC_DEPLOY_TIME: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}
+          PUBLIC_DEPLOY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      # Strict CSP forbids inline scripts and styles; fail the build if any slip in.
+      - name: Check CSP compatibility
+        run: |
+          if grep -rEl '<script(\s[^>]*)?>[^<]|<style|style="' --include='*.html' dist; then
+            echo "::error::inline script/style found; it would be blocked by the CSP"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: site/dist
+          retention-days: 7
+
+  deploy:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://kovalov.in
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site/dist
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::524941137773:role/gha-deploy-site-prod
+          role-session-name: gha-deploy-site-${{ github.run_id }}
+          aws-region: eu-central-1
+
+      - name: Upload to S3
+        run: |
+          bucket=$(aws ssm get-parameter --name /kovalov-in/prod/site/bucket --query Parameter.Value --output text)
+          # Fingerprinted assets never change: cache for a year.
+          aws s3 sync dist/_astro "s3://$bucket/_astro" \
+            --cache-control "public, max-age=31536000, immutable"
+          # Everything else (HTML, feeds, sitemap) must revalidate on every request.
+          aws s3 sync dist "s3://$bucket" --delete --exclude "_astro/*" \
+            --cache-control "public, max-age=0, must-revalidate"
+
+      - name: Invalidate CloudFront
+        run: |
+          dist_id=$(aws ssm get-parameter --name /kovalov-in/prod/site/distribution-id --query Parameter.Value --output text)
+          id=$(aws cloudfront create-invalidation --distribution-id "$dist_id" --paths "/*" --query Invalidation.Id --output text)
+          aws cloudfront wait invalidation-completed --distribution-id "$dist_id" --id "$id"
+          echo "Deployed ${GITHUB_SHA::7} to https://kovalov.in" >> "$GITHUB_STEP_SUMMARY"
