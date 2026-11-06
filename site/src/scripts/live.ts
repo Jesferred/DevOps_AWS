@@ -29,7 +29,30 @@ export interface Status {
     by_service: { service: string; amount: number }[];
     updated_at: string;
   } | null;
+  security: {
+    checked_at: string;
+    ssl_labs: { grade: string; endpoints: number; protocols: string[]; report_url: string } | null;
+    observatory: { grade: string; score: number; tests_passed: number; tests_total: number; report_url: string } | null;
+    hsts_preload: string | null;
+    dnssec: boolean | null;
+    caa: boolean | null;
+    dmarc_policy: string | null;
+  } | null;
+  dora: {
+    deployments: number;
+    deploys_per_week: number;
+    deploy_frequency_level: Level | null;
+    lead_time_h: number | null;
+    lead_time_level: Level | null;
+    change_failure_rate: number | null;
+    change_failure_rate_level: Level | null;
+    time_to_restore_min: number | null;
+    time_to_restore_level: Level | null;
+    recent: { at: string; kind: string; sha: string; status: string; lead_time_h: number; run_url: string | null }[];
+  };
 }
+
+export type Level = 'elite' | 'high' | 'medium' | 'low';
 
 export type Health = 'operational' | 'degraded' | 'stale' | 'unknown';
 
@@ -69,6 +92,10 @@ export const fmt = {
     return `${Math.round(s / 86400)} d ago`;
   },
   utc: (iso: string | null | undefined) => (iso ? `${iso.slice(0, 16).replace('T', ' ')} UTC` : '—'),
+  text: (v: string | null | undefined) => (v == null || v === '' ? '—' : String(v)),
+  duration: (h: number | null | undefined) =>
+    h == null ? '—' : h < 1 ? `${Math.round(h * 60)} min` : h < 48 ? `${h.toFixed(1)} h` : `${(h / 24).toFixed(1)} d`,
+  perWeek: (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(1)} / week`),
 };
 
 /** Resolve "a.b.c" against the status object. */
@@ -80,8 +107,30 @@ function pick(obj: unknown, path: string): unknown {
 export function fill(root: ParentNode, s: Status): void {
   root.querySelectorAll<HTMLElement>('[data-live]').forEach((el) => {
     const value = pick(s, el.dataset.live!);
-    const f = fmt[(el.dataset.fmt ?? 'int') as keyof typeof fmt] as (v: unknown) => string;
-    el.textContent = f(value as never);
+    const f = fmt[(el.dataset.fmt ?? 'int') as keyof typeof fmt] as (v: unknown, digits?: number) => string;
+    el.textContent = el.dataset.digits ? f(value, Number(el.dataset.digits)) : f(value);
+  });
+}
+
+/**
+ * <el data-check="security.dnssec"> gets data-state="pass|fail|unknown";
+ * <el data-level="dora.lead_time_level"> gets data-state=<level> and the level as text.
+ * Colors come from CSS attribute selectors, never inline styles.
+ */
+export function fillStates(root: ParentNode, s: Status): void {
+  root.querySelectorAll<HTMLElement>('[data-check]').forEach((el) => {
+    const v = pick(s, el.dataset.check!);
+    const pass = el.dataset.pass ? el.dataset.pass.split(',').includes(String(v)) : v === true;
+    el.dataset.state = v == null ? 'unknown' : pass ? 'pass' : 'fail';
+  });
+  root.querySelectorAll<HTMLElement>('[data-level]').forEach((el) => {
+    const v = pick(s, el.dataset.level!) as string | null | undefined;
+    el.dataset.state = v ?? 'unknown';
+    el.textContent = v ?? '—';
+  });
+  root.querySelectorAll<HTMLAnchorElement>('a[data-href]').forEach((a) => {
+    const href = pick(s, a.dataset.href!);
+    if (typeof href === 'string' && href.startsWith('https://')) a.href = href;
   });
 }
 

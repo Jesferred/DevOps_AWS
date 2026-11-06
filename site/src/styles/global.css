@@ -59,31 +59,15 @@
   }
 }
 
-/* Long-form text for blog posts (replaces @tailwindcss/typography). */
+/* Long-form text (status page methodology). */
 .prose {
   @apply max-w-none leading-7 text-fg;
 
-  & h2 { @apply mt-10 mb-3 text-2xl font-semibold tracking-tight; }
-  & h3 { @apply mt-8 mb-2 text-xl font-semibold; }
-  & p, & ul, & ol, & pre, & blockquote { @apply my-4; }
-  & ul { @apply list-disc pl-6; }
-  & ol { @apply list-decimal pl-6; }
-  & a { @apply text-accent underline underline-offset-4; }
+  & h2 { @apply mb-3 text-2xl font-semibold tracking-tight; }
+  & ul { @apply my-4 list-disc space-y-2 pl-6; }
   & strong { @apply font-semibold; }
-  & blockquote { @apply border-l-2 border-accent pl-4 text-muted; }
   & :not(pre) > code { @apply rounded bg-surface px-1.5 py-0.5 font-mono text-[0.9em] ring-1 ring-line; }
-  & pre { @apply overflow-x-auto rounded-lg p-4 font-mono text-sm ring-1 ring-line; }
-  & table { @apply my-6 w-full text-left text-sm; }
-  & th, & td { @apply border-b border-line py-2 pr-4; }
 }
-
-/* Prism tokens, themed by the same variables as the rest of the site. */
-.prose pre[class*="language-"] { @apply bg-surface; }
-.token.comment, .token.prolog { @apply text-muted italic; }
-.token.keyword, .token.boolean, .token.important { @apply text-accent; }
-.token.string, .token.attr-value { @apply text-ok; }
-.token.number, .token.constant { @apply text-warn; }
-.token.function, .token.property { @apply font-semibold; }
 
 /* Health badge: state comes from the data-health attribute set by live.ts. */
 .health-badge {
@@ -101,3 +85,16 @@
 .day-warn { @apply fill-warn; }
 .day-bad { @apply fill-red-500; }
 .day-none { @apply fill-line; }
+
+/* Pass/fail checks and DORA levels, set by fillStates() in live.ts. */
+.check { @apply inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm; }
+.check::before { content: "…"; @apply font-mono text-muted; }
+.check[data-state="pass"]::before { content: "✓"; @apply text-ok; }
+.check[data-state="fail"]::before { content: "✗"; @apply text-warn; }
+.level { @apply rounded px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-wide ring-1 ring-line text-muted; }
+.level[data-state="elite"] { @apply text-ok ring-ok/50; }
+.level[data-state="high"] { @apply text-accent ring-accent/50; }
+.level[data-state="medium"], .level[data-state="low"] { @apply text-warn ring-warn/50; }
+.grade { @apply font-mono text-6xl font-bold tracking-tight text-muted; }
+.grade[data-state="pass"] { @apply text-ok; }
+.grade[data-state="fail"] { @apply text-warn; }

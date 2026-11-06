@@ -138,6 +138,40 @@ const small = 'mt-1 font-mono text-xs text-muted';
       </div>
     </section>
 
+    <!-- Delivery -->
+    <section class="mt-16">
+      <h2 class="text-2xl font-semibold tracking-tight">Delivery · DORA</h2>
+      <p class="mt-1 max-w-2xl text-sm text-muted">
+        The four key metrics of software delivery performance, over the last 30 days. Levels use the thresholds
+        of the DORA State of DevOps report.
+      </p>
+      <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <article class={card}>
+          <p class={label}>Deploy frequency</p>
+          <p class={big} data-live="dora.deploys_per_week" data-fmt="perWeek">—</p>
+          <p class="mt-2"><span class="level" data-level="dora.deploy_frequency_level">—</span></p>
+        </article>
+        <article class={card}>
+          <p class={label}>Lead time for changes</p>
+          <p class={big} data-live="dora.lead_time_h" data-fmt="duration">—</p>
+          <p class="mt-2"><span class="level" data-level="dora.lead_time_level">—</span> <span class={small}>first commit → prod, median</span></p>
+        </article>
+        <article class={card}>
+          <p class={label}>Change failure rate</p>
+          <p class={big} data-live="dora.change_failure_rate" data-fmt="pct" data-digits="1">—</p>
+          <p class="mt-2"><span class="level" data-level="dora.change_failure_rate_level">—</span></p>
+        </article>
+        <article class={card}>
+          <p class={label}>Time to restore</p>
+          <p class={big} data-live="dora.time_to_restore_min" data-fmt="min">—</p>
+          <p class="mt-2"><span class="level" data-level="dora.time_to_restore_level">—</span></p>
+        </article>
+      </div>
+      <ul class="mt-6 divide-y divide-line font-mono text-sm" data-deploy-list>
+        <li class="py-3 text-muted">No deployments recorded yet.</li>
+      </ul>
+    </section>
+
     <!-- Cost -->
     <section class="mt-16">
       <h2 class="text-2xl font-semibold tracking-tight">Cost</h2>
@@ -188,6 +222,11 @@ const small = 'mt-1 font-mono text-xs text-muted';
           histograms, the same way Prometheus <code>histogram_quantile</code> works.
         </li>
         <li>
+          <strong>DORA.</strong> Every production deploy and Terraform apply records an event from CI: commit, earliest
+          commit time in the push, deploy time, result. A change counts as failed if its deploy failed or an SLO incident
+          started within an hour of it.
+        </li>
+        <li>
           <strong>Cost</strong> is read once a week from AWS Cost Explorer. Each API call costs $0.01, so it is never
           queried per page view.
         </li>
@@ -197,13 +236,32 @@ const small = 'mt-1 font-mono text-xs text-muted';
 </Base>
 
 <script>
-  import { el, fill, fmt, health, loadStatus, setHealth, svg, type Status } from '../scripts/live';
+  import { el, fill, fillStates, fmt, health, loadStatus, setHealth, svg, type Status } from '../scripts/live';
 
   const root = document.querySelector<HTMLElement>('[data-status-root]')!;
 
   function render(s: Status) {
     fill(root, s);
-    root.querySelector('[data-live="coverage_30d"]')!.textContent = fmt.pct(s.coverage_30d, 1);
+    fillStates(root, s);
+
+    const deploys = root.querySelector('[data-deploy-list]')!;
+    if (s.dora?.recent.length) {
+      deploys.replaceChildren(
+        ...s.dora.recent.map((d) => {
+          const li = el('li', 'flex flex-wrap gap-x-4 py-3');
+          const sha = el('a', 'text-accent underline underline-offset-4', d.sha);
+          if (d.run_url?.startsWith('https://github.com/')) sha.href = d.run_url;
+          li.append(
+            el('span', 'text-muted', fmt.utc(d.at)),
+            el('span', '', d.kind),
+            sha,
+            el('span', d.status === 'success' ? 'text-ok' : 'text-warn', d.status),
+            el('span', 'text-muted', `lead ${fmt.duration(d.lead_time_h)}`),
+          );
+          return li;
+        }),
+      );
+    }
 
     const bar = root.querySelector('[data-budget-bar]');
     const left = Math.max(0, Math.min(1, s.error_budget.remaining_ratio));

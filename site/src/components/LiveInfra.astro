@@ -61,19 +61,41 @@ const card = 'rounded-xl border border-line bg-surface p-5';
     </article>
   </div>
 
+  <div class="mt-4 grid gap-4 rounded-xl border border-line p-5 sm:grid-cols-2 lg:grid-cols-4" aria-label="DORA metrics, last 30 days">
+    <div>
+      <p class="flex items-center gap-2 text-sm text-muted">Deploy frequency <span class="level" data-level="dora.deploy_frequency_level">—</span></p>
+      <p class="mt-1 font-semibold" data-live="dora.deploys_per_week" data-fmt="perWeek">—</p>
+    </div>
+    <div>
+      <p class="flex items-center gap-2 text-sm text-muted">Lead time <span class="level" data-level="dora.lead_time_level">—</span></p>
+      <p class="mt-1 font-semibold" data-live="dora.lead_time_h" data-fmt="duration">—</p>
+    </div>
+    <div>
+      <p class="flex items-center gap-2 text-sm text-muted">Change failure rate <span class="level" data-level="dora.change_failure_rate_level">—</span></p>
+      <p class="mt-1 font-semibold" data-live="dora.change_failure_rate" data-fmt="pct" data-digits="1">—</p>
+    </div>
+    <div>
+      <p class="flex items-center gap-2 text-sm text-muted">Time to restore <span class="level" data-level="dora.time_to_restore_level">—</span></p>
+      <p class="mt-1 font-semibold" data-live="dora.time_to_restore_min" data-fmt="min">—</p>
+    </div>
+  </div>
+
   <p class="mt-4 text-right font-mono text-xs text-muted">
     updated <span data-live="generated_at" data-fmt="ago">—</span> ·
-    <a href="/status/" class="underline underline-offset-4 hover:text-fg">SLOs, incidents & methodology →</a>
+    <a href="/status/" class="underline underline-offset-4 hover:text-fg">SLOs, DORA, incidents & methodology →</a>
   </p>
 </section>
 
 <script>
-  import { fill, health, loadStatus, setHealth } from '../scripts/live';
+  import { fill, fillStates, health, loadStatus, setHealth } from '../scripts/live';
 
   const root = document.querySelector<HTMLElement>('[data-live-root]');
   if (root) {
     loadStatus().then((status) => {
-      if (status) fill(root, status);
+      if (status) {
+        fill(root, status);
+        fillStates(root, status);
+      }
       setHealth(root, health(status));
     });
   }
