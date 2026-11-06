@@ -1,0 +1,4 @@
+Contact: https://github.com/Jesferred/DevOps_AWS/security/advisories/new
+Expires: 2027-11-01T00:00:00.000Z
+Preferred-Languages: en, uk, ru
+Canonical: https://kovalov.in/.well-known/security.txt

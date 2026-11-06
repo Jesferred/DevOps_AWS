@@ -1,0 +1,21 @@
+---
+const nav = [
+  { href: '/#live', label: 'Live infra' },
+  { href: '/#projects', label: 'Projects' },
+  { href: '/blog/', label: 'Blog' },
+  { href: '/#contact', label: 'Contact' },
+];
+---
+
+<header class="sticky top-0 z-40 border-b border-line bg-bg/80 backdrop-blur">
+  <nav class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6" aria-label="Main">
+    <a href="/" class="font-mono text-sm font-semibold">
+      <span class="text-accent">~/</span>kovalov.in
+    </a>
+    <ul class="flex gap-4 text-sm text-muted sm:gap-6">
+      {nav.map((item) => (
+        <li><a href={item.href} class="hover:text-fg">{item.label}</a></li>
+      ))}
+    </ul>
+  </nav>
+</header>

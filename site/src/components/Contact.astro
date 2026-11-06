@@ -1,0 +1,21 @@
+---
+import { profile } from '../data/profile';
+
+const links = [
+  { label: 'GitHub', href: profile.links.github },
+  { label: 'LinkedIn', href: profile.links.linkedin },
+  ...(profile.links.email ? [{ label: 'Email', href: `mailto:${profile.links.email}` }] : []),
+];
+---
+
+<section id="contact" class="scroll-mt-20 py-12">
+  <h2 class="text-2xl font-semibold tracking-tight">Contact</h2>
+  <p class="mt-2 max-w-xl text-muted">Open to DevOps / SRE roles and infrastructure projects. The fastest way to reach me:</p>
+  <ul class="mt-6 flex flex-wrap gap-3">
+    {links.map((l) => (
+      <li>
+        <a href={l.href} class="inline-block rounded-lg border border-line bg-surface px-5 py-2.5 font-medium hover:border-accent">{l.label}</a>
+      </li>
+    ))}
+  </ul>
+</section>
