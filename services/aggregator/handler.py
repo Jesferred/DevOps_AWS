@@ -5,12 +5,15 @@ Two modes, each on its own schedule:
   incidents -> live/status.json in the site bucket + CloudWatch alert metrics.
 - "cost" (weekly): month-to-date cost and forecast from Cost Explorer.
   Cost Explorer API calls cost $0.01 each, so they never run per request.
+- "security" (weekly): SSL Labs, Mozilla Observatory, HSTS preload, DNS checks.
 
 DynamoDB layout (single table):
   pk=probe#YYYY-MM-DD  sk=<iso>#<region>  raw probes, TTL 35 days
   pk=daily             sk=YYYY-MM-DD      finalized per-day rollup
   pk=incident          sk=<iso start>     incident start/end
   pk=cost              sk=latest          last Cost Explorer snapshot
+  pk=security          sk=latest          last security posture snapshot
+  pk=deploy            sk=<iso>#<kind>    deployment events written by CI (DORA)
 """
 
 from __future__ import annotations
@@ -24,11 +27,14 @@ from decimal import Decimal
 import boto3
 from boto3.dynamodb.conditions import Key
 
+import dora
+import security
 import slo
 
 SLO_TARGET = float(os.environ.get("SLO_TARGET", "0.999"))
 WINDOW_DAYS = 30
 SITE_BUCKET = os.environ["SITE_BUCKET"]
+SITE_HOST = os.environ.get("SITE_HOST", "kovalov.in")
 STATUS_KEY = "live/status.json"
 METRIC_NAMESPACE = "KovalovIn/SLO"
 
@@ -127,6 +133,10 @@ def _load_incidents(since: int) -> list[slo.Incident]:
     return [slo.Incident(i["start"], i.get("end")) for i in _query("incident", _iso(since))]
 
 
+def _load_deployments(since: int) -> list[dict]:
+    return _query("deploy", _iso(since))
+
+
 # --- status ----------------------------------------------------------------
 
 def build_status(now: int) -> tuple[dict, dict]:
@@ -193,6 +203,26 @@ def build_status(now: int) -> tuple[dict, dict]:
     recent = sorted(incidents_90d, key=lambda i: i.start, reverse=True)[:5]
 
     cost = table.get_item(Key={"pk": "cost", "sk": "latest"}).get("Item")
+    posture = table.get_item(Key={"pk": "security", "sk": "latest"}).get("Item")
+
+    deploy_items = _load_deployments(now - WINDOW_DAYS * 86400)
+    deployments = [
+        dora.Deployment(int(d["deployed_at"]), int(d["commit_at"]), d["status"] == "success", d["kind"])
+        for d in deploy_items
+    ]
+    mttr = slo.mttr_minutes(incidents_90d)
+    dora_metrics = dora.dora(deployments, incidents_30d, None if mttr is None else mttr * 60, WINDOW_DAYS * 86400)
+    recent_deploys = [
+        {
+            "at": _iso(int(d["deployed_at"])),
+            "kind": d["kind"],
+            "sha": d["sha"][:7],
+            "status": d["status"],
+            "lead_time_h": _round((int(d["deployed_at"]) - int(d["commit_at"])) / 3600, 2),
+            "run_url": d.get("run_url"),
+        }
+        for d in sorted(deploy_items, key=lambda d: d["deployed_at"], reverse=True)[:5]
+    ]
 
     doc = {
         "schema": 1,
@@ -238,6 +268,8 @@ def build_status(now: int) -> tuple[dict, dict]:
             for d in days
         ],
         "cost": _plain({k: v for k, v in cost.items() if k not in ("pk", "sk")}) if cost else None,
+        "security": _plain({k: v for k, v in posture.items() if k not in ("pk", "sk")}) if posture else None,
+        "dora": {**dora_metrics, "recent": recent_deploys},
         "probes_5m": sum(1 for i in items if i["ts"] >= now - 300),
     }
     return doc, alerts
@@ -315,5 +347,30 @@ def update_cost() -> dict:
     return {"month_to_date": mtd, "forecast": forecast}
 
 
+# --- security --------------------------------------------------------------
+
+def _to_dynamo(v):
+    if isinstance(v, float):
+        return Decimal(str(v))
+    if isinstance(v, list):
+        return [_to_dynamo(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _to_dynamo(x) for k, x in v.items()}
+    return v
+
+
+def update_security(context) -> dict:
+    # Leave a minute of headroom before the Lambda timeout for the write.
+    deadline = time.time() + context.get_remaining_time_in_millis() / 1000 - 60
+    result = security.run(SITE_HOST, deadline)
+    table.put_item(Item={"pk": "security", "sk": "latest", "checked_at": _iso(int(time.time())), **_to_dynamo(result)})
+    return result
+
+
 def handler(event, context):
-    return update_cost() if (event or {}).get("mode") == "cost" else update_status()
+    mode = (event or {}).get("mode", "status")
+    if mode == "cost":
+        return update_cost()
+    if mode == "security":
+        return update_security(context)
+    return update_status()

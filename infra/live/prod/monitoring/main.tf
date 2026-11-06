@@ -3,7 +3,8 @@
 #   probers (3 regions, every minute) --> DynamoDB --> aggregator (every 5 min)
 #                                                        |--> s3://<site>/live/status.json (site "Live infra")
 #                                                        '--> CloudWatch burn-rate metrics --> alarms --> SNS
-#   aggregator (weekly) --> Cost Explorer --> DynamoDB
+#   aggregator (weekly) --> Cost Explorer, SSL Labs, Mozilla Observatory --> DynamoDB
+#   CI deploy/apply jobs --> deployment events --> DynamoDB (DORA metrics)
 
 terraform {
   required_version = ">= 1.11"
@@ -328,7 +329,9 @@ resource "aws_lambda_function" "aggregator" {
   filename         = data.archive_file.aggregator.output_path
   source_code_hash = data.archive_file.aggregator.output_base64sha256
   memory_size      = 256
-  timeout          = 60
+  # The weekly security run waits for an SSL Labs assessment (several minutes);
+  # status runs finish in seconds.
+  timeout = 900
 
   # ~8.6k invocations/month: within the X-Ray free tier (100k traces).
   tracing_config {
@@ -340,6 +343,7 @@ resource "aws_lambda_function" "aggregator" {
       TABLE_NAME  = aws_dynamodb_table.monitoring.name
       SITE_BUCKET = data.aws_s3_bucket.site.id
       SLO_TARGET  = tostring(local.slo_target)
+      SITE_HOST   = "kovalov.in"
     }
   }
 
@@ -382,6 +386,49 @@ resource "aws_scheduler_schedule" "aggregator_cost" {
     role_arn = aws_iam_role.scheduler.arn
     input    = jsonencode({ mode = "cost" })
   }
+}
+
+resource "aws_scheduler_schedule" "aggregator_security" {
+  name                = "${local.name}-aggregator-security"
+  description         = "Weekly SSL Labs, Mozilla Observatory, HSTS preload and DNS checks"
+  schedule_expression = "cron(30 6 ? * MON *)"
+
+  flexible_time_window {
+    mode = "OFF"
+  }
+
+  target {
+    arn      = aws_lambda_function.aggregator.arn
+    role_arn = aws_iam_role.scheduler.arn
+    input    = jsonencode({ mode = "security" })
+
+    retry_policy {
+      maximum_retry_attempts = 0 # SSL Labs rate-limits new assessments
+    }
+  }
+}
+
+# --- DORA: CI records deployment events ---
+
+# The deploy role lives in prod/site; this stack grants it write access to its
+# own table so the dependency points one way (monitoring -> site).
+data "aws_iam_policy_document" "record_deployments" {
+  statement {
+    actions   = ["dynamodb:PutItem"]
+    resources = [aws_dynamodb_table.monitoring.arn]
+
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["deploy"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "site_deploy_records" {
+  name   = "record-deployments"
+  role   = "gha-deploy-site-prod"
+  policy = data.aws_iam_policy_document.record_deployments.json
 }
 
 # --- alerts ---

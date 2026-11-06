@@ -22,8 +22,19 @@ defaults:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      commit_at: ${{ steps.lead.outputs.commit_at }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for DORA lead time
+
+      - name: Earliest commit in this push
+        id: lead
+        working-directory: .
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: echo "commit_at=$(.github/scripts/commit-time.sh)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@v4
         with:
@@ -67,6 +78,10 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
       - uses: actions/download-artifact@v4
         with:
           name: site
@@ -95,3 +110,13 @@ jobs:
           id=$(aws cloudfront create-invalidation --distribution-id "$dist_id" --paths "/*" --query Invalidation.Id --output text)
           aws cloudfront wait invalidation-completed --distribution-id "$dist_id" --id "$id"
           echo "Deployed ${GITHUB_SHA::7} to https://kovalov.in" >> "$GITHUB_STEP_SUMMARY"
+
+      # DORA: every production deploy, failed ones included. Never fails the job.
+      - name: Record deployment
+        if: always() && job.status != 'cancelled'
+        continue-on-error: true
+        working-directory: .
+        env:
+          STATUS: ${{ job.status }}
+          COMMIT_AT: ${{ needs.build.outputs.commit_at }}
+        run: .github/scripts/record-deployment.sh site "$STATUS" "$COMMIT_AT"
