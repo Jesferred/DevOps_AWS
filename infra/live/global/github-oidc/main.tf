@@ -33,7 +33,9 @@ provider "aws" {
 }
 
 locals {
-  repo         = "Jesferred/DevOps_AWS"
+  # GitHub issues `sub` with immutable owner/repo IDs: a renamed or re-created
+  # repository with the same name cannot assume these roles.
+  repo         = "Jesferred@44315534/DevOps_AWS@1433110978"
   state_bucket = "kovalov-in-tfstate-524941137773"
 }
 

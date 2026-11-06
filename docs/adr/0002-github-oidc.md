@@ -15,11 +15,15 @@ GitHub-signed JWT for 1-hour STS credentials.
 
 | Role        | Permissions                           | Who can assume (`sub` claim)                       |
 |-------------|---------------------------------------|----------------------------------------------------|
-| `gha-plan`  | `ReadOnlyAccess` + state lock objects | `repo:Jesferred/DevOps_AWS:*` (any branch, PRs)     |
-| `gha-apply` | `AdministratorAccess`                 | `repo:Jesferred/DevOps_AWS:environment:production`  |
+| `gha-plan`  | `ReadOnlyAccess` + state lock objects | `repo:Jesferred@44315534/DevOps_AWS@1433110978:*` (any branch, PRs) |
+| `gha-apply` | `AdministratorAccess`                 | `repo:Jesferred@44315534/DevOps_AWS@1433110978:environment:production` |
 
 The `production` GitHub environment requires manual approval, so no change
 reaches AWS without a human review of the plan.
+
+The `sub` claim uses GitHub's immutable owner and repository IDs
+(`owner@id/repo@id`), so a renamed, deleted or re-created repository with the
+same name cannot assume the roles.
 
 ## Consequences
 
