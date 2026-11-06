@@ -1,0 +1,23 @@
+# Assumptions: ~5k visits/month (~10 requests, ~150 KB each) plus synthetic
+# probes from prod/monitoring (3 regions x 1/min = ~130k requests, ~25 KB each).
+version: 0.1
+resource_usage:
+  aws_cloudfront_distribution.site:
+    monthly_https_requests:
+      us: 60000
+      europe: 120000
+    monthly_data_transfer_to_internet_gb:
+      us: 1.5
+      europe: 2.5
+    monthly_invalidation_requests: 30
+  aws_cloudfront_function.viewer_request:
+    monthly_requests: 180000
+  aws_s3_bucket.site:
+    standard:
+      storage_gb: 0.05
+      monthly_tier_1_requests: 3000 # PUT/LIST from deploys
+      monthly_tier_2_requests: 20000 # GET on CloudFront cache misses
+  aws_route53_record.site["kovalov.in-A"]:
+    monthly_standard_queries: 50000
+  aws_route53_record.site["kovalov.in-AAAA"]:
+    monthly_standard_queries: 20000

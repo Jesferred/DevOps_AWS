@@ -1,0 +1,77 @@
+name: infracost
+
+# Posts the monthly cost of every stack, and the difference this PR makes,
+# as a single PR comment that is updated on each push.
+on:
+  pull_request:
+    paths: ["infra/**", "infracost.yml", ".github/workflows/infracost.yml"]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: infracost-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  cost:
+    runs-on: ubuntu-latest
+    env:
+      INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
+    steps:
+      # Dependabot PRs and forks cannot read repository secrets.
+      - name: Check API key
+        id: key
+        run: |
+          if [ -z "$INFRACOST_API_KEY" ]; then
+            echo "::notice::INFRACOST_API_KEY is not available; skipping cost estimate"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: infracost/actions/setup@v5
+        if: steps.key.outputs.present == 'true'
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+          version: 0.10.47
+
+      - name: Checkout base branch
+        if: steps.key.outputs.present == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Baseline estimate
+        if: steps.key.outputs.present == 'true'
+        run: |
+          if [ -f infracost.yml ]; then
+            infracost breakdown --config-file=infracost.yml --format=json --out-file=/tmp/infracost-base.json
+          else
+            # First PR that introduces Infracost: compare against nothing.
+            echo '{"version":"0.2","projects":[]}' > /tmp/infracost-base.json
+          fi
+
+      - name: Checkout PR branch
+        if: steps.key.outputs.present == 'true'
+        uses: actions/checkout@v4
+
+      - name: Diff against base
+        if: steps.key.outputs.present == 'true'
+        run: |
+          infracost diff --config-file=infracost.yml \
+            --compare-to=/tmp/infracost-base.json \
+            --format=json --out-file=/tmp/infracost.json
+          infracost output --path=/tmp/infracost.json --format=github-comment \
+            --show-skipped --out-file=/tmp/infracost-comment.md
+          cat /tmp/infracost-comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post PR comment
+        if: steps.key.outputs.present == 'true'
+        run: |
+          infracost comment github --path=/tmp/infracost.json \
+            --repo="$GITHUB_REPOSITORY" \
+            --github-token="${{ github.token }}" \
+            --pull-request="${{ github.event.pull_request.number }}" \
+            --behavior=update
