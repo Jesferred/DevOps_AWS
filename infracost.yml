@@ -1,0 +1,20 @@
+# Infracost: monthly cost estimate per stack, posted as a PR comment.
+# Usage files describe expected traffic; without them usage-based resources
+# (Lambda, DynamoDB, CloudFront, S3) would show $0. List prices only:
+# the AWS free tier and Free plan credits are not applied.
+version: 0.1
+projects:
+  - path: infra/bootstrap
+    name: bootstrap
+  - path: infra/live/global/dns
+    name: global/dns
+  - path: infra/live/global/github-oidc
+    name: global/github-oidc
+  - path: infra/live/global/alerting
+    name: global/alerting
+  - path: infra/live/prod/site
+    name: prod/site
+    usage_file: infra/live/prod/site/infracost-usage.yml
+  - path: infra/live/prod/monitoring
+    name: prod/monitoring
+    usage_file: infra/live/prod/monitoring/infracost-usage.yml

@@ -1,0 +1,94 @@
+name: security
+
+# Shift-left security: IaC misconfigurations, vulnerable dependencies, leaked
+# secrets (Trivy) and code-level flaws (CodeQL). Findings land in
+# Security > Code scanning and as annotations on the PR diff.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * 1" # weekly: new CVEs appear without code changes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TRIVY_VERSION: 0.76.0
+  # Dependabot PRs get a read-only token and cannot upload SARIF.
+  CAN_UPLOAD: ${{ github.actor != 'dependabot[bot]' }}
+
+jobs:
+  trivy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned release binary with checksum check instead of a third-party
+      # action: one less piece of code with access to this workflow.
+      - name: Install Trivy
+        run: |
+          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          tarball="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -sSfLO "$base/$tarball"
+          curl -sSfLO "$base/trivy_${TRIVY_VERSION}_checksums.txt"
+          grep " ${tarball}\$" "trivy_${TRIVY_VERSION}_checksums.txt" | sha256sum -c
+          tar -xzf "$tarball" trivy && sudo mv trivy /usr/local/bin/
+          trivy --version
+
+      - name: IaC misconfigurations
+        run: |
+          trivy config --ignorefile .trivyignore.yaml --format sarif -o trivy-iac.sarif infra
+          trivy config --ignorefile .trivyignore.yaml --severity HIGH,CRITICAL --exit-code 1 infra
+
+      - name: Dependencies and secrets
+        run: |
+          # Lockfiles are the source of truth; nothing is installed in this job.
+          trivy fs --scanners vuln,secret --format sarif -o trivy-fs.sarif .
+          trivy fs --scanners vuln,secret --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 .
+
+      - name: Upload IaC results
+        if: always() && env.CAN_UPLOAD == 'true'
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-iac.sarif
+          category: trivy-iac
+
+      - name: Upload dependency and secret results
+        if: always() && env.CAN_UPLOAD == 'true'
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  codeql:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # `actions` analyzes the workflows themselves (script injection, unsafe triggers).
+        language: [actions, javascript-typescript, python]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
