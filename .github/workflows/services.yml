@@ -1,0 +1,27 @@
+name: services
+
+on:
+  pull_request:
+    paths: ["services/**", ".github/workflows/services.yml"]
+  push:
+    branches: [main]
+    paths: ["services/**", ".github/workflows/services.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13" # same as the Lambda runtime
+
+      - name: Compile
+        run: python -m compileall -q services
+
+      - name: Unit tests (SLO math)
+        run: python -m unittest discover -s services/aggregator/tests -v
