@@ -17,6 +17,8 @@ concurrency:
 jobs:
   cost:
     runs-on: ubuntu-latest
+    # Informational only: an Infracost outage or plan limit must never block a merge.
+    continue-on-error: true
     env:
       INFRACOST_API_KEY: ${{ secrets.INFRACOST_API_KEY }}
     steps:
