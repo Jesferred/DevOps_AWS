@@ -41,6 +41,7 @@ jobs:
           - infra/bootstrap
           - infra/live/global/dns
           - infra/live/global/github-oidc
+          - infra/live/prod/site
     defaults:
       run:
         working-directory: ${{ matrix.stack }}
@@ -73,3 +74,46 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           # 0 = no changes, 2 = changes present; anything else is a failure
           [ "${code:-0}" -ne 1 ]
+
+  # Runs only on main and waits for manual approval in the `production` environment.
+  apply:
+    needs: plan
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      # Dependency order: state bucket -> DNS zone -> CI roles -> workloads.
+      STACKS: >-
+        infra/bootstrap
+        infra/live/global/dns
+        infra/live/global/github-oidc
+        infra/live/prod/site
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::524941137773:role/gha-apply
+          role-session-name: gha-apply-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: terraform apply
+        run: |
+          for stack in $STACKS; do
+            echo "::group::$stack"
+            terraform -chdir="$stack" init -input=false
+            code=0
+            terraform -chdir="$stack" plan -input=false -detailed-exitcode -out=tfplan || code=$?
+            case $code in
+              0) echo "no changes" ;;
+              2) terraform -chdir="$stack" apply -input=false tfplan
+                 echo "- \`$stack\`: applied" >> "$GITHUB_STEP_SUMMARY" ;;
+              *) exit "$code" ;;
+            esac
+            echo "::endgroup::"
+          done

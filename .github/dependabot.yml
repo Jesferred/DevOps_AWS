@@ -10,5 +10,6 @@ updates:
       - /infra/bootstrap
       - /infra/modules/*
       - /infra/live/global/*
+      - /infra/live/prod/*
     schedule:
       interval: weekly
