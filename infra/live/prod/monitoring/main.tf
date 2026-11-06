@@ -104,6 +104,11 @@ resource "aws_dynamodb_table" "monitoring" {
     type = "S"
   }
 
+  # Restore to any second in the last 35 days; ~$0.02/month at this table size.
+  point_in_time_recovery {
+    enabled = true
+  }
+
   # Raw probes expire after 35 days; rollups and incidents have no TTL attribute.
   ttl {
     attribute_name = "expires_at"
@@ -192,6 +197,11 @@ resource "aws_iam_role" "aggregator" {
 resource "aws_iam_role_policy_attachment" "aggregator_logs" {
   role       = aws_iam_role.aggregator.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy_attachment" "aggregator_xray" {
+  role       = aws_iam_role.aggregator.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
 }
 
 data "aws_iam_policy_document" "aggregator" {
@@ -319,6 +329,11 @@ resource "aws_lambda_function" "aggregator" {
   source_code_hash = data.archive_file.aggregator.output_base64sha256
   memory_size      = 256
   timeout          = 60
+
+  # ~8.6k invocations/month: within the X-Ray free tier (100k traces).
+  tracing_config {
+    mode = "Active"
+  }
 
   environment {
     variables = {

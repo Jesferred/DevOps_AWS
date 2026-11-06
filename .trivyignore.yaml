@@ -1,0 +1,51 @@
+# Accepted risks for `trivy config`. Every entry states why it is accepted;
+# anything not listed here fails CI at HIGH/CRITICAL. Reviewed 2026-11-06.
+misconfigurations:
+  # --- Customer-managed KMS keys -------------------------------------------
+  # Data is encrypted at rest with AWS-owned/managed keys (SSE-S3, DynamoDB
+  # default, CloudWatch Logs default). A CMK adds key-policy control and
+  # CloudTrail key usage logs at $1/month per key, more than the whole
+  # project's monthly bill. Revisit if the project stores personal data.
+  - id: AWS-0132 # S3 SSE with CMK
+    statement: SSE-S3 is sufficient for public site assets and Terraform state; CMK cost not justified.
+  - id: AWS-0017 # CloudWatch log groups with CMK
+    statement: Logs contain probe timings only; default CloudWatch Logs encryption applies.
+  - id: AWS-0025 # DynamoDB with CMK
+    statement: Table holds public monitoring data; encrypted with the AWS-owned key by default.
+
+  # --- SNS encryption --------------------------------------------------------
+  - id: AWS-0095
+    paths:
+      - "live/global/alerting/main.tf"
+    statement: >-
+      CloudWatch alarms and AWS Budgets cannot publish to a topic encrypted with
+      the AWS-managed SNS key; encryption would require a $1/month CMK. Alert
+      payloads contain no secrets.
+
+  # --- Edge protection -------------------------------------------------------
+  - id: AWS-0011 # WAF on CloudFront
+    paths:
+      - "live/prod/site/main.tf"
+    statement: >-
+      Static site with no forms, API or login. AWS Shield Standard is included
+      with CloudFront; WAF starts at ~$5/month. Revisit when an API is exposed.
+
+  # --- Access logging --------------------------------------------------------
+  - id: AWS-0010 # CloudFront access logs
+    paths:
+      - "live/prod/site/main.tf"
+    statement: >-
+      Availability and latency come from synthetic probes; request logs are a
+      planned addition for real-traffic metrics.
+  - id: AWS-0089 # S3 server access logs
+    statement: >-
+      Both buckets are private: the site bucket is read only by CloudFront via
+      OAC and written only by the CI deploy role; the state bucket only by CI.
+
+  # --- Tracing ---------------------------------------------------------------
+  - id: AWS-0066 # Lambda X-Ray
+    paths:
+      - "modules/prober/main.tf"
+    statement: >-
+      Probers run 130k times a month, beyond the X-Ray free tier; each run is a
+      single HTTPS request already timed phase by phase. The aggregator is traced.
