@@ -76,4 +76,5 @@ jobs:
             --repo="$GITHUB_REPOSITORY" \
             --github-token="${{ github.token }}" \
             --pull-request="${{ github.event.pull_request.number }}" \
-            --behavior=update
+            --behavior=update \
+          || echo "::warning::infracost comment exited non-zero; usually a failed Infracost Cloud policy check, see the PR comment"

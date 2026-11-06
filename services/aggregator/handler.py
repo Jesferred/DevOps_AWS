@@ -3,7 +3,7 @@
 Two modes, each on its own schedule:
 - "status" (every 5 min): availability, error budget, burn rates, latency,
   incidents -> live/status.json in the site bucket + CloudWatch alert metrics.
-- "cost" (daily): month-to-date cost and forecast from Cost Explorer.
+- "cost" (weekly): month-to-date cost and forecast from Cost Explorer.
   Cost Explorer API calls cost $0.01 each, so they never run per request.
 
 DynamoDB layout (single table):

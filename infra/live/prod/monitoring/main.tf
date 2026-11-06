@@ -3,7 +3,7 @@
 #   probers (3 regions, every minute) --> DynamoDB --> aggregator (every 5 min)
 #                                                        |--> s3://<site>/live/status.json (site "Live infra")
 #                                                        '--> CloudWatch burn-rate metrics --> alarms --> SNS
-#   aggregator (daily) --> Cost Explorer --> DynamoDB
+#   aggregator (weekly) --> Cost Explorer --> DynamoDB
 
 terraform {
   required_version = ">= 1.11"
@@ -351,10 +351,11 @@ resource "aws_scheduler_schedule" "aggregator_status" {
   }
 }
 
-# Cost Explorer data refreshes a few times a day; one $0.01 call pair per day is enough.
+# Weekly is enough for a portfolio cost card: 2 calls x $0.01 x ~4.3 weeks = ~$0.09/month
+# instead of ~$0.60 for a daily refresh. Mondays 06:00 UTC.
 resource "aws_scheduler_schedule" "aggregator_cost" {
   name                = "${local.name}-aggregator-cost"
-  schedule_expression = "cron(0 6 * * ? *)"
+  schedule_expression = "cron(0 6 ? * MON *)"
 
   flexible_time_window {
     mode                      = "FLEXIBLE"

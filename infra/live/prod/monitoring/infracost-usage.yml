@@ -1,5 +1,5 @@
 # Assumptions: probes every minute in 3 regions (43,200 runs/month each),
-# aggregator every 5 minutes (8,640 runs) plus one daily cost run.
+# aggregator every 5 minutes (8,640 runs) plus one weekly cost run.
 version: 0.1
 resource_usage:
   module.prober_eu.aws_lambda_function.this:
@@ -12,7 +12,7 @@ resource_usage:
     monthly_requests: 43200
     request_duration_ms: 600
   aws_lambda_function.aggregator:
-    monthly_requests: 8670
+    monthly_requests: 8645
     request_duration_ms: 2000
   aws_dynamodb_table.monitoring:
     monthly_write_request_units: 140000
