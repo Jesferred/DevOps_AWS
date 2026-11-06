@@ -1,0 +1,32 @@
+# Assumptions: probes every minute in 3 regions (43,200 runs/month each),
+# aggregator every 5 minutes (8,640 runs) plus one daily cost run.
+version: 0.1
+resource_usage:
+  module.prober_eu.aws_lambda_function.this:
+    monthly_requests: 43200
+    request_duration_ms: 300
+  module.prober_us.aws_lambda_function.this:
+    monthly_requests: 43200
+    request_duration_ms: 400
+  module.prober_ap.aws_lambda_function.this:
+    monthly_requests: 43200
+    request_duration_ms: 600
+  aws_lambda_function.aggregator:
+    monthly_requests: 8670
+    request_duration_ms: 2000
+  aws_dynamodb_table.monitoring:
+    monthly_write_request_units: 140000
+    monthly_read_request_units: 3700000 # each run reads up to 2 days of probes
+    storage_gb: 0.1
+  module.prober_eu.aws_cloudwatch_log_group.this:
+    storage_gb: 0.01
+    monthly_data_ingested_gb: 0.01
+  module.prober_us.aws_cloudwatch_log_group.this:
+    storage_gb: 0.01
+    monthly_data_ingested_gb: 0.01
+  module.prober_ap.aws_cloudwatch_log_group.this:
+    storage_gb: 0.01
+    monthly_data_ingested_gb: 0.01
+  aws_cloudwatch_log_group.aggregator:
+    storage_gb: 0.02
+    monthly_data_ingested_gb: 0.02

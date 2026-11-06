@@ -13,3 +13,7 @@ override.tf.json
 .DS_Store
 .idea/
 .vscode/
+
+# Lambda packages built by archive_file
+.build/
+__pycache__/

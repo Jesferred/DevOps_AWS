@@ -20,6 +20,8 @@ env:
   TF_VERSION: 1.13.4
   AWS_REGION: eu-central-1
   TF_IN_AUTOMATION: "true"
+  # Kept out of the public repo; set under Settings > Secrets and variables > Variables.
+  TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
 
 jobs:
   fmt:
@@ -41,7 +43,9 @@ jobs:
           - infra/bootstrap
           - infra/live/global/dns
           - infra/live/global/github-oidc
+          - infra/live/global/alerting
           - infra/live/prod/site
+          - infra/live/prod/monitoring
     defaults:
       run:
         working-directory: ${{ matrix.stack }}
@@ -87,7 +91,9 @@ jobs:
         infra/bootstrap
         infra/live/global/dns
         infra/live/global/github-oidc
+        infra/live/global/alerting
         infra/live/prod/site
+        infra/live/prod/monitoring
     steps:
       - uses: actions/checkout@v4
 
