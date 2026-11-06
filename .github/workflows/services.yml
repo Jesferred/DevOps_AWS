@@ -1,8 +1,8 @@
 name: services
 
 on:
+  # No path filter on PRs: these are required checks and must always report.
   pull_request:
-    paths: ["services/**", ".github/workflows/services.yml"]
   push:
     branches: [main]
     paths: ["services/**", ".github/workflows/services.yml"]

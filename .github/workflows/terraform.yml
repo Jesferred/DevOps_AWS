@@ -1,8 +1,8 @@
 name: terraform
 
 on:
+  # No path filter on PRs: these are required checks and must always report.
   pull_request:
-    paths: ["infra/**", ".github/workflows/terraform.yml"]
   push:
     branches: [main]
     paths: ["infra/**", ".github/workflows/terraform.yml"]
@@ -78,6 +78,17 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           # 0 = no changes, 2 = changes present; anything else is a failure
           [ "${code:-0}" -ne 1 ]
+
+  # Single required check for branch protection, independent of the stack list.
+  terraform:
+    needs: [fmt, plan]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: All plans succeeded
+        run: |
+          echo "fmt=${{ needs.fmt.result }} plan=${{ needs.plan.result }}"
+          [ "${{ needs.fmt.result }}" = success ] && [ "${{ needs.plan.result }}" = success ]
 
   # Runs only on main and waits for manual approval in the `production` environment.
   apply:
