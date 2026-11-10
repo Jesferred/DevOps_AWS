@@ -94,6 +94,10 @@ const controls = [
       const tls = root.querySelector<HTMLElement>('[data-check="security.ssl_labs.protocols"]');
       if (tls && protocols) tls.dataset.state = protocols.some((p) => /SSL|TLS 1\.[01]$/.test(p)) ? 'fail' : 'pass';
       root.querySelectorAll<HTMLElement>('.check').forEach(label);
+      // hstspreload.org answers "unknown" for domains that were never submitted.
+      const hsts = root.querySelector('[data-live="security.hsts_preload"]');
+      const names: Record<string, string> = { unknown: 'Not submitted', pending: 'Pending', preloaded: 'Preloaded' };
+      if (hsts && s.security.hsts_preload) hsts.textContent = names[s.security.hsts_preload] ?? s.security.hsts_preload;
     });
   }
 </script>
