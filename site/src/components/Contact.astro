@@ -1,21 +1,30 @@
 ---
+import Icon from './Icon.astro';
 import { profile } from '../data/profile';
-
-const links = [
-  { label: 'GitHub', href: profile.links.github },
-  { label: 'LinkedIn', href: profile.links.linkedin },
-  ...(profile.links.email ? [{ label: 'Email', href: `mailto:${profile.links.email}` }] : []),
-];
 ---
 
-<section id="contact" class="scroll-mt-20 py-12">
-  <h2 class="text-2xl font-semibold tracking-tight">Contact</h2>
-  <p class="mt-2 max-w-xl text-muted">Open to DevOps / SRE roles and infrastructure projects. The fastest way to reach me:</p>
-  <ul class="mt-6 flex flex-wrap gap-3">
-    {links.map((l) => (
-      <li>
-        <a href={l.href} class="inline-block rounded-lg border border-line bg-surface px-5 py-2.5 font-medium hover:border-accent">{l.label}</a>
-      </li>
-    ))}
-  </ul>
+<section id="contact" class="section container-page">
+  <div class="card flex flex-col gap-8 p-6 sm:p-10 lg:flex-row lg:items-center lg:justify-between">
+    <div class="max-w-xl">
+      <p class="eyebrow">Contact</p>
+      <h2 class="section-title">Let's talk infrastructure</h2>
+      <p class="section-lede">Open to DevOps and SRE roles and to infrastructure projects. The quickest way to reach me:</p>
+    </div>
+    <div class="flex flex-wrap gap-3">
+      <a href={profile.links.linkedin} class="btn btn-primary h-12 px-5" rel="me">
+        <Icon name="brand-linkedin" />
+        LinkedIn
+      </a>
+      <a href={profile.links.github} class="btn btn-ghost h-12 px-5" rel="me">
+        <Icon name="brand-github" />
+        GitHub
+      </a>
+      {profile.links.email && (
+        <a href={`mailto:${profile.links.email}`} class="btn btn-ghost h-12 px-5">
+          <Icon name="mail" />
+          Email
+        </a>
+      )}
+    </div>
+  </div>
 </section>

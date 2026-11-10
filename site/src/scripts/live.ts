@@ -58,13 +58,14 @@ export type Health = 'operational' | 'degraded' | 'stale' | 'unknown';
 
 const STALE_AFTER_MS = 15 * 60 * 1000;
 
-export async function loadStatus(): Promise<Status | null> {
-  try {
-    const res = await fetch('/live/status.json', { cache: 'no-cache' });
-    return res.ok ? ((await res.json()) as Status) : null;
-  } catch {
-    return null;
-  }
+let pending: Promise<Status | null> | undefined;
+
+/** One fetch per page view, shared by every block that shows live data. */
+export function loadStatus(): Promise<Status | null> {
+  pending ??= fetch('/live/status.json', { cache: 'no-cache' })
+    .then((res) => (res.ok ? (res.json() as Promise<Status>) : null))
+    .catch(() => null);
+  return pending;
 }
 
 export function health(s: Status | null): Health {
@@ -136,7 +137,7 @@ export function fillStates(root: ParentNode, s: Status): void {
 
 export function setHealth(root: ParentNode, h: Health): void {
   const labels: Record<Health, string> = {
-    operational: 'All systems operational',
+    operational: 'Operational',
     degraded: 'Degraded',
     stale: 'Monitoring data is stale',
     unknown: 'Collecting data',

@@ -1,102 +1,114 @@
 ---
-// Last deploy is baked in at build time by CI; everything else is read in the
-// browser from /live/status.json, refreshed every 5 minutes by the aggregator.
-const sha = import.meta.env.PUBLIC_DEPLOY_SHA as string | undefined;
-const deployedAt = import.meta.env.PUBLIC_DEPLOY_TIME as string | undefined;
-const runUrl = import.meta.env.PUBLIC_DEPLOY_RUN_URL as string | undefined;
+import Icon from './Icon.astro';
 
-const deployed = deployedAt ? new Date(deployedAt) : undefined;
-const card = 'rounded-xl border border-line bg-surface p-5';
+const dora = [
+  ['Deployment frequency', 'dora.deploys_per_week', 'perWeek', 'dora.deploy_frequency_level'],
+  ['Lead time for changes', 'dora.lead_time_h', 'duration', 'dora.lead_time_level'],
+  ['Change failure rate', 'dora.change_failure_rate', 'pct', 'dora.change_failure_rate_level'],
+  ['Time to restore', 'dora.time_to_restore_min', 'min', 'dora.time_to_restore_level'],
+] as const;
 ---
 
-<section id="live" class="scroll-mt-20 py-12" data-live-root>
-  <div class="flex flex-wrap items-baseline justify-between gap-4">
-    <h2 class="text-2xl font-semibold tracking-tight">Live infra</h2>
-    <a href="/status/" class="health-badge" data-health="unknown">
-      <span class="health-dot" aria-hidden="true"></span>
-      <span data-health-text>Collecting data</span>
+<section id="live" class="section container-page" data-live-root>
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <p class="eyebrow">Live infra</p>
+      <h2 class="section-title">This site is the portfolio</h2>
+      <p class="section-lede">
+        Every number below is measured by infrastructure in the repo: probes in three regions every minute, an SLO
+        with an error budget, DORA metrics recorded by CI and the real AWS bill.
+      </p>
+    </div>
+    <a href="/status/" class="btn btn-ghost">
+      Full status <Icon name="arrow-up-right" size={16} />
     </a>
   </div>
 
-  <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-    <article class={card}>
-      <p class="text-sm text-muted">Uptime · 30 days</p>
-      <p class="mt-2 text-2xl font-semibold" data-live="availability.30d" data-fmt="pct">—</p>
-      <p class="mt-1 font-mono text-xs text-muted">
-        SLO <span data-live="slo.target" data-fmt="pct">99.9%</span> ·
-        budget left <span data-live="error_budget.remaining_min" data-fmt="min">—</span>
-      </p>
+  <!-- Availability: the headline chart. -->
+  <article class="card mt-8 p-5 sm:p-6">
+    <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+      <div>
+        <h3 class="text-sm text-ink-2">Availability, last 30 days</h3>
+        <p class="mt-1 text-3xl font-semibold tracking-tight">
+          <span data-live="availability.30d" data-fmt="pct">—</span>
+          <span class="ml-2 align-middle text-sm font-normal text-muted">
+            SLO <span data-live="slo.target" data-fmt="pct" data-digits="1">99.9%</span>
+          </span>
+        </p>
+      </div>
+      <ul class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-2" aria-label="Legend">
+        <li class="flex items-center gap-1.5"><span class="status-dot" data-state="good"></span>Met SLO</li>
+        <li class="flex items-center gap-1.5"><span class="status-dot" data-state="warn"></span>Below SLO</li>
+        <li class="flex items-center gap-1.5"><span class="status-dot" data-state="bad"></span>Below 99%</li>
+        <li class="flex items-center gap-1.5"><span class="status-dot"></span>No data</li>
+      </ul>
+    </div>
+    <div class="mt-5" data-uptime-strip></div>
+  </article>
+
+  <div class="mt-4 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+    <article class="stat">
+      <p class="stat-label"><Icon name="gauge" />Latency p95 · 24h</p>
+      <p class="stat-value" data-live="latency_ms.24h.p95" data-fmt="ms">—</p>
+      <svg class="h-8 w-full" aria-hidden="true" data-spark="p95"></svg>
+      <p class="stat-meta">p50 <span data-live="latency_ms.24h.p50" data-fmt="ms">—</span> · trend: daily p95</p>
     </article>
 
-    <article class={card}>
-      <p class="text-sm text-muted">Latency p95 · 24h</p>
-      <p class="mt-2 text-2xl font-semibold" data-live="latency_ms.24h.p95" data-fmt="ms">—</p>
-      <p class="mt-1 font-mono text-xs text-muted">
-        p50 <span data-live="latency_ms.24h.p50" data-fmt="ms">—</span> · 3 regions
-      </p>
+    <article class="stat">
+      <p class="stat-label"><Icon name="clock" />Error budget left</p>
+      <p class="stat-value" data-live="error_budget.remaining_min" data-fmt="min">—</p>
+      <div class="meter mt-3" data-budget><div class="meter-fill"></div></div>
+      <p class="stat-meta mt-2">of <span data-live="error_budget.total_min" data-fmt="min">43.2 min</span> per 30 days</p>
     </article>
 
-    <article class={card}>
-      <p class="text-sm text-muted">AWS cost · this month</p>
-      <p class="mt-2 text-2xl font-semibold" data-live="cost.month_to_date" data-fmt="usd">—</p>
-      <p class="mt-1 font-mono text-xs text-muted">
-        forecast <span data-live="cost.forecast_month" data-fmt="usd">—</span> · before credits
-      </p>
+    <article class="stat">
+      <p class="stat-label"><Icon name="currency-dollar" />AWS cost · this month</p>
+      <p class="stat-value" data-live="cost.month_to_date" data-fmt="usd">—</p>
+      <p class="stat-meta mt-auto">forecast <span data-live="cost.forecast_month" data-fmt="usd">—</span> · before credits</p>
     </article>
 
-    <article class={card}>
-      <p class="text-sm text-muted">Last deploy</p>
-      {deployed ? (
-        <>
-          <p class="mt-2 text-2xl font-semibold">
-            <time datetime={deployed.toISOString()}>{deployed.toISOString().slice(0, 16).replace('T', ' ')} UTC</time>
-          </p>
-          <p class="mt-1 font-mono text-xs text-muted">
-            {runUrl ? <a href={runUrl} class="underline underline-offset-4 hover:text-fg">{sha?.slice(0, 7)}</a> : sha?.slice(0, 7)}
-          </p>
-        </>
-      ) : (
-        <p class="mt-2 text-2xl font-semibold text-muted">local build</p>
-      )}
+    <article class="stat">
+      <p class="stat-label"><Icon name="certificate" />TLS certificate</p>
+      <p class="stat-value"><span data-live="tls_cert_days_left">—</span> <span class="text-base font-normal text-muted">days left</span></p>
+      <p class="stat-meta mt-auto">ACM · renews automatically</p>
     </article>
   </div>
 
-  <div class="mt-4 grid gap-4 rounded-xl border border-line p-5 sm:grid-cols-2 lg:grid-cols-4" aria-label="DORA metrics, last 30 days">
-    <div>
-      <p class="flex items-center gap-2 text-sm text-muted">Deploy frequency <span class="level" data-level="dora.deploy_frequency_level">—</span></p>
-      <p class="mt-1 font-semibold" data-live="dora.deploys_per_week" data-fmt="perWeek">—</p>
+  <!-- DORA: four keys, each with its performance level. -->
+  <article class="card mt-4 overflow-hidden" aria-label="DORA metrics, last 30 days">
+    <div class="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
+      <h3 class="flex items-center gap-2 text-sm text-ink-2"><Icon name="git-merge" size={16} class="text-muted" />Delivery performance (DORA)</h3>
+      <span class="font-mono text-xs text-muted">30 days</span>
     </div>
-    <div>
-      <p class="flex items-center gap-2 text-sm text-muted">Lead time <span class="level" data-level="dora.lead_time_level">—</span></p>
-      <p class="mt-1 font-semibold" data-live="dora.lead_time_h" data-fmt="duration">—</p>
+    <!-- 1px gaps on a line-colored grid draw the dividers at any column count. -->
+    <div class="grid grid-cols-2 gap-px bg-line lg:grid-cols-4">
+      {dora.map(([label, path, f, level]) => (
+        <div class="bg-surface p-4 sm:p-5">
+          <p class="text-sm text-ink-2">{label}</p>
+          <p class="mt-1 text-xl font-semibold tracking-tight" data-live={path} data-fmt={f} data-digits={f === 'pct' ? '1' : undefined}>—</p>
+          <p class="mt-2"><span class="level" data-level={level}>—</span></p>
+        </div>
+      ))}
     </div>
-    <div>
-      <p class="flex items-center gap-2 text-sm text-muted">Change failure rate <span class="level" data-level="dora.change_failure_rate_level">—</span></p>
-      <p class="mt-1 font-semibold" data-live="dora.change_failure_rate" data-fmt="pct" data-digits="1">—</p>
-    </div>
-    <div>
-      <p class="flex items-center gap-2 text-sm text-muted">Time to restore <span class="level" data-level="dora.time_to_restore_level">—</span></p>
-      <p class="mt-1 font-semibold" data-live="dora.time_to_restore_min" data-fmt="min">—</p>
-    </div>
-  </div>
+  </article>
 
-  <p class="mt-4 text-right font-mono text-xs text-muted">
-    updated <span data-live="generated_at" data-fmt="ago">—</span> ·
-    <a href="/status/" class="underline underline-offset-4 hover:text-fg">SLOs, DORA, incidents & methodology →</a>
-  </p>
+  <p class="mt-3 text-right font-mono text-xs text-muted">updated <span data-live="generated_at" data-fmt="ago">—</span></p>
 </section>
 
 <script>
-  import { fill, fillStates, health, loadStatus, setHealth } from '../scripts/live';
+  import { budgetMeter, sparkline, uptimeStrip } from '../scripts/charts';
+  import { fill, fillStates, loadStatus } from '../scripts/live';
 
   const root = document.querySelector<HTMLElement>('[data-live-root]');
   if (root) {
-    loadStatus().then((status) => {
-      if (status) {
-        fill(root, status);
-        fillStates(root, status);
-      }
-      setHealth(root, health(status));
+    const strip = root.querySelector<HTMLElement>('[data-uptime-strip]')!;
+    loadStatus().then((s) => {
+      uptimeStrip(strip, s?.daily ?? [], s?.slo.target ?? 0.999);
+      if (!s) return;
+      fill(root, s);
+      fillStates(root, s);
+      sparkline(root.querySelector<SVGSVGElement>('[data-spark="p95"]')!, s.daily.map((d) => d.p95_ms));
+      budgetMeter(root.querySelector<HTMLElement>('[data-budget]')!, s.error_budget.remaining_ratio);
     });
   }
 </script>
