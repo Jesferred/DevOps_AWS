@@ -43,7 +43,7 @@ const tile = 'flex flex-col justify-between rounded-xl border border-line bg-sur
   <ul class="mt-4 flex flex-wrap gap-2" aria-label="Security controls">
     <li class="check" data-check="security.ssl_labs.protocols" data-state="unknown">TLS 1.2+ only</li>
     <li class="check" data-state="pass">Strict CSP, no inline code</li>
-    <li class="check" data-state="pass">Private origin (CloudFront OAC)</li>
+    <li class="check" data-state="pass">Own ACM certificate, ECDSA P-256</li>
     <li class="check" data-check="security.caa">CAA: only Amazon may issue certs</li>
     <li class="check" data-check="security.dmarc_policy" data-pass="quarantine,reject">DMARC enforced</li>
     <li class="check" data-check="security.dnssec">DNSSEC</li>

@@ -14,9 +14,10 @@ export const projects: Project[] = [
     title: 'kovalov.in: this site',
     summary:
       'A static site run like a production service: everything in Terraform, keyless CI/CD, edge security headers and a live view of its own reliability and cost.',
-    stack: ['AWS S3', 'CloudFront', 'ACM', 'Route 53', 'Terraform', 'GitHub Actions', 'Astro'],
+    stack: ['AWS Amplify', 'S3', 'ACM', 'Route 53', 'Lambda', 'DynamoDB', 'Terraform', 'GitHub Actions', 'Astro'],
     highlights: [
-      'Private S3 origin, reachable only through CloudFront Origin Access Control',
+      'Versioned releases in S3: one-click rollback to any of the last 5 deploys',
+      'Synthetic probes from 3 regions feeding a public 99.9% SLO with burn-rate alerts',
       'GitHub Actions authenticates to AWS via OIDC, with no stored keys and approval-gated apply',
       'Remote state with native S3 locking; every change goes through plan in PR',
       'HSTS preload, strict CSP, DNS CAA and DMARC',

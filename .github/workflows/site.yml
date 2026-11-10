@@ -93,23 +93,23 @@ jobs:
           role-session-name: gha-deploy-site-${{ github.run_id }}
           aws-region: eu-central-1
 
-      - name: Upload to S3
+      - name: Publish release
+        id: release
+        working-directory: site/dist
         run: |
           bucket=$(aws ssm get-parameter --name /kovalov-in/prod/site/bucket --query Parameter.Value --output text)
-          # Fingerprinted assets never change: cache for a year.
-          aws s3 sync dist/_astro "s3://$bucket/_astro" \
-            --cache-control "public, max-age=31536000, immutable"
-          # Everything else (HTML, feeds, sitemap) must revalidate on every request.
-          # live/* is written by the monitoring aggregator, not by the build.
-          aws s3 sync dist "s3://$bucket" --delete --exclude "_astro/*" --exclude "live/*" \
-            --cache-control "public, max-age=0, must-revalidate"
+          zip -qr ../site.zip .
+          # Each upload is a new object version: the rollback history.
+          version=$(aws s3api put-object --bucket "$bucket" --key releases/site.zip --body ../site.zip \
+            --metadata "sha=$GITHUB_SHA,run=$GITHUB_RUN_ID" --query VersionId --output text)
+          echo "bucket=$bucket" >> "$GITHUB_OUTPUT"
+          echo "Release \`${GITHUB_SHA::7}\` stored as version \`$version\`" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Invalidate CloudFront
-        run: |
-          dist_id=$(aws ssm get-parameter --name /kovalov-in/prod/site/distribution-id --query Parameter.Value --output text)
-          id=$(aws cloudfront create-invalidation --distribution-id "$dist_id" --paths "/*" --query Invalidation.Id --output text)
-          aws cloudfront wait invalidation-completed --distribution-id "$dist_id" --id "$id"
-          echo "Deployed ${GITHUB_SHA::7} to https://kovalov.in" >> "$GITHUB_STEP_SUMMARY"
+      - name: Deploy to Amplify
+        working-directory: .
+        env:
+          BUCKET: ${{ steps.release.outputs.bucket }}
+        run: .github/scripts/amplify-deploy.sh "$BUCKET"
 
       # DORA: every production deploy, failed ones included. Never fails the job.
       - name: Record deployment

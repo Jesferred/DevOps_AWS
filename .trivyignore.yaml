@@ -22,25 +22,23 @@ misconfigurations:
       the AWS-managed SNS key; encryption would require a $1/month CMK. Alert
       payloads contain no secrets.
 
-  # --- Edge protection -------------------------------------------------------
-  - id: AWS-0011 # WAF on CloudFront
+  # --- Public live data -----------------------------------------------------
+  - id: AWS-0087 # block_public_policy disabled
     paths:
       - "live/prod/site/main.tf"
     statement: >-
-      Static site with no forms, API or login. AWS Shield Standard is included
-      with CloudFront; WAF starts at ~$5/month. Revisit when an API is exposed.
+      The bucket policy grants public read on live/* only: monitoring JSON that
+      the site displays anyway. ACLs remain blocked; releases/ stays private.
+  - id: AWS-0093 # restrict_public_buckets disabled
+    paths:
+      - "live/prod/site/main.tf"
+    statement: Same as AWS-0087; required for the live/* public-read statement to take effect.
 
   # --- Access logging --------------------------------------------------------
-  - id: AWS-0010 # CloudFront access logs
-    paths:
-      - "live/prod/site/main.tf"
-    statement: >-
-      Availability and latency come from synthetic probes; request logs are a
-      planned addition for real-traffic metrics.
   - id: AWS-0089 # S3 server access logs
     statement: >-
-      Both buckets are private: the site bucket is read only by CloudFront via
-      OAC and written only by the CI deploy role; the state bucket only by CI.
+      Writes to both buckets come only from CI roles and the aggregator, all
+      recorded by CloudTrail; reads of public live/* data need no audit trail.
 
   # --- Tracing ---------------------------------------------------------------
   - id: AWS-0066 # Lambda X-Ray
