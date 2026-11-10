@@ -248,10 +248,11 @@ resource "aws_s3_bucket_policy" "site" {
 # --- Amplify Hosting ---
 
 resource "aws_amplify_app" "site" {
-  name           = "kovalov-in-prod"
-  description    = "kovalov.in, deployed from CI as zip releases"
-  platform       = "WEB"
-  custom_headers = file("${path.module}/custom-headers.yml")
+  name        = "kovalov-in-prod"
+  description = "kovalov.in, deployed from CI as zip releases"
+  platform    = "WEB"
+  # Amplify stores headers as JSON; sending JSON avoids a permanent YAML-vs-JSON diff.
+  custom_headers = jsonencode(yamldecode(file("${path.module}/custom-headers.yml")).customHeaders)
 
   cache_config {
     type = "AMPLIFY_MANAGED_NO_COOKIES"
@@ -404,10 +405,16 @@ data "aws_iam_policy_document" "deploy" {
     resources = [aws_s3_bucket.site.arn, "${aws_s3_bucket.site.arn}/${local.release_key}"]
   }
 
+  # StartDeployment is authorized against .../branches/main/deployments/start,
+  # GetJob and ListJobs against .../branches/main/jobs/<id>.
   statement {
-    sid       = "DeployToAmplify"
-    actions   = ["amplify:StartDeployment", "amplify:GetJob", "amplify:ListJobs"]
-    resources = [aws_amplify_branch.main.arn, "${aws_amplify_branch.main.arn}/jobs/*"]
+    sid     = "DeployToAmplify"
+    actions = ["amplify:StartDeployment", "amplify:GetJob", "amplify:ListJobs"]
+    resources = [
+      aws_amplify_branch.main.arn,
+      "${aws_amplify_branch.main.arn}/deployments/*",
+      "${aws_amplify_branch.main.arn}/jobs/*",
+    ]
   }
 
   statement {

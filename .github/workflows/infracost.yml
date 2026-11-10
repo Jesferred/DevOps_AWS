@@ -43,7 +43,9 @@ jobs:
         if: steps.key.outputs.present == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.ref }}
+          # Exact base commit, not the branch: if the PR is merged while this job
+          # waits in the queue, `main` already contains the PR and the diff is empty.
+          ref: ${{ github.event.pull_request.base.sha }}
 
       - name: Baseline estimate
         if: steps.key.outputs.present == 'true'
