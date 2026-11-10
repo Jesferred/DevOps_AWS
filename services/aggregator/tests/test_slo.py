@@ -13,6 +13,7 @@ from slo import (  # noqa: E402
     count_minutes,
     find_incidents,
     histogram,
+    hourly,
     merge_histograms,
     minute_status,
     mtbf_hours,
@@ -117,3 +118,18 @@ class IncidentTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HourlyTest(unittest.TestCase):
+    def test_buckets_cover_last_24_hours_with_gaps_as_none(self):
+        now = T0 - T0 % 3600 + 1800  # half past an hour
+        data = [Probe(now - 60, r, True, ms) for r, ms in (("a", 100.0), ("b", 300.0))]
+        data += [Probe(now - 3 * 3600, r, False, None) for r in ("a", "b")]
+        series = hourly(data, now)
+        self.assertEqual(len(series), 24)
+        self.assertEqual(series[-1]["start"], now - 1800)
+        self.assertEqual(series[-1]["p95_ms"], 300.0)
+        self.assertEqual(series[-1]["availability"], 1.0)
+        self.assertEqual(series[-4]["availability"], 0.0)
+        self.assertIsNone(series[-4]["p95_ms"])
+        self.assertIsNone(series[0]["availability"])

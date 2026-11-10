@@ -224,6 +224,28 @@
   @apply ml-auto font-mono text-xs text-muted;
 }
 
+/* A value missing for a known reason ("none yet") reads as a note, not a number. */
+p[data-missing] {
+  @apply font-normal text-muted;
+}
+
+.stat-value[data-missing] {
+  @apply text-lg;
+}
+
+/* Two or three mutually exclusive chart ranges. */
+.range-toggle {
+  @apply inline-flex rounded-lg border border-line bg-page p-0.5 text-xs;
+}
+
+.range-toggle button {
+  @apply rounded-md px-2.5 py-1 font-medium text-muted transition-colors hover:text-ink;
+}
+
+.range-toggle button[aria-pressed="true"] {
+  @apply bg-raised text-ink shadow-sm;
+}
+
 /* DORA performance level: dot carries severity, label carries meaning. */
 .level {
   @apply inline-flex items-center gap-1.5 font-mono text-[11px] font-medium tracking-wide text-ink-2 uppercase;

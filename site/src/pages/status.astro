@@ -13,7 +13,7 @@ const dora = [
   ['Deployment frequency', 'dora.deploys_per_week', 'perWeek', 'dora.deploy_frequency_level'],
   ['Lead time for changes', 'dora.lead_time_h', 'duration', 'dora.lead_time_level'],
   ['Change failure rate', 'dora.change_failure_rate', 'pct', 'dora.change_failure_rate_level'],
-  ['Time to restore', 'dora.time_to_restore_min', 'min', 'dora.time_to_restore_level'],
+  ['Time to restore', 'dora.time_to_restore_min', 'min', 'dora.time_to_restore_level', 'Nothing to restore yet'],
 ] as const;
 ---
 
@@ -24,8 +24,9 @@ const dora = [
         <p class="eyebrow">kovalov.in · production</p>
         <h1 class="mt-2 text-4xl font-semibold tracking-tight sm:text-5xl">Status</h1>
         <p class="mt-3 font-mono text-xs text-muted">
-          updated <span data-live="generated_at" data-fmt="ago">—</span> · 30-day data coverage{' '}
-          <span data-live="coverage_30d" data-fmt="pct" data-digits="1">—</span> ·
+          updated <span data-live="generated_at" data-fmt="ago">—</span> · data since{' '}
+          <span data-since>—</span> · 30-day coverage{' '}
+          <span data-live="coverage_30d" data-fmt="pct" data-digits="1">—</span> ·{' '}
           <a href="/live/status.json" class="link">raw JSON</a>
         </p>
       </div>
@@ -117,7 +118,13 @@ const dora = [
 
       <div class="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <article class="card p-5 sm:p-6">
-          <h3 class="text-sm text-ink-2">Daily p95 latency, ms · last 30 days</h3>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h3 class="text-sm text-ink-2" data-p95-title>p95 latency, ms · last 24 hours</h3>
+            <div class="range-toggle" role="group" aria-label="Time range">
+              <button type="button" data-range="24h" aria-pressed="true">24 h</button>
+              <button type="button" data-range="30d" aria-pressed="false">30 days</button>
+            </div>
+          </div>
           <div class="mt-4" data-p95-chart></div>
         </article>
 
@@ -159,12 +166,12 @@ const dora = [
         </article>
         <article class="stat">
           <p class="stat-label">MTTR</p>
-          <p class="stat-value" data-live="incidents.mttr_min" data-fmt="min">—</p>
+          <p class="stat-value" data-live="incidents.mttr_min" data-fmt="min" data-empty="No incidents yet">—</p>
           <p class="stat-meta mt-auto">mean time to recovery · 90 days</p>
         </article>
         <article class="stat">
           <p class="stat-label">MTBF</p>
-          <p class="stat-value" data-live="incidents.mtbf_h" data-fmt="hours">—</p>
+          <p class="stat-value" data-live="incidents.mtbf_h" data-fmt="hours" data-empty="No failures yet">—</p>
           <p class="stat-meta mt-auto">mean time between failures · 30 days</p>
         </article>
       </div>
@@ -183,11 +190,11 @@ const dora = [
         The four key metrics of software delivery performance over 30 days, with levels from the State of DevOps report.
       </p>
       <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {dora.map(([label, path, f, level]) => (
+        {dora.map(([label, path, f, level, empty]) => (
           <article class="stat">
             <p class="stat-label">{label}</p>
-            <p class="stat-value" data-live={path} data-fmt={f} data-digits={f === 'pct' ? '1' : undefined}>—</p>
-            <p class="mt-auto pt-2"><span class="level" data-level={level}>—</span></p>
+            <p class="stat-value" data-live={path} data-fmt={f} data-digits={f === 'pct' ? '1' : undefined} data-empty={empty}>—</p>
+            <p class="mt-auto pt-2"><span class="level" data-level={level} data-empty="n/a">—</span></p>
           </article>
         ))}
       </div>
@@ -216,8 +223,8 @@ const dora = [
           </article>
           <article class="stat">
             <p class="stat-label">Forecast · full month</p>
-            <p class="stat-value" data-live="cost.forecast_month" data-fmt="usd">—</p>
-            <p class="stat-meta">AWS Cost Explorer · usage before credits</p>
+            <p class="stat-value" data-live="cost.forecast_month" data-fmt="usd" data-empty="Not available yet">—</p>
+            <p class="stat-meta" data-forecast-meta>AWS Cost Explorer · usage before credits</p>
           </article>
         </div>
         <article class="card p-5 sm:p-6">
@@ -225,6 +232,7 @@ const dora = [
           <ul class="mt-4 space-y-3 text-sm" data-cost-rows>
             <li class="text-muted">Cost data refreshes weekly.</li>
           </ul>
+          <p class="mt-4 text-xs text-muted" data-cost-note hidden></p>
         </article>
       </div>
     </section>
@@ -315,13 +323,41 @@ const dora = [
       );
     }
 
-    // p95 line over the last 30 calendar days, gaps where there is no data.
+    if (s.daily.length) q('[data-since]').textContent = s.daily[0].date;
+
+    // p95 latency: hourly over 24h (useful from the first hour of data) or
+    // daily over 30 days. Gaps stay gaps; nothing is interpolated.
     const byDate = new Map(s.daily.map((d) => [d.date, d]));
-    const points = Array.from({ length: 30 }, (_, i) => {
-      const date = new Date(Date.now() - (29 - i) * 86400000).toISOString().slice(0, 10);
-      return { label: date.slice(5), value: byDate.get(date)?.p95_ms ?? null };
-    });
-    lineChart(q('[data-p95-chart]'), points, { unit: 'ms', name: 'Daily p95 latency' });
+    const ranges = {
+      '24h': {
+        title: 'p95 latency, ms · last 24 hours',
+        name: 'Hourly p95 latency',
+        axis: ['24 h ago', 'now'] as [string, string],
+        points: (s.hourly ?? []).map((h) => ({
+          label: h.start.slice(11, 16),
+          title: `${h.start.slice(0, 10)} ${h.start.slice(11, 16)} UTC`,
+          value: h.p95_ms,
+        })),
+      },
+      '30d': {
+        title: 'p95 latency, ms · last 30 days',
+        name: 'Daily p95 latency',
+        points: Array.from({ length: 30 }, (_, i) => {
+          const date = new Date(Date.now() - (29 - i) * 86400000).toISOString().slice(0, 10);
+          return { label: date.slice(5), title: date, value: byDate.get(date)?.p95_ms ?? null };
+        }),
+      },
+    };
+    const buttons = root.querySelectorAll<HTMLButtonElement>('[data-range]');
+    const show = (key: keyof typeof ranges) => {
+      const r = ranges[key];
+      buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.range === key)));
+      q('[data-p95-title]').textContent = r.title;
+      lineChart(q('[data-p95-chart]'), r.points, { unit: 'ms', name: r.name, axis: 'axis' in r ? r.axis : undefined });
+    };
+    buttons.forEach((b) => b.addEventListener('click', () => show(b.dataset.range as keyof typeof ranges)));
+    // Older documents have no hourly series: fall back to the daily view.
+    show(s.hourly?.length ? '24h' : '30d');
 
     // Phases are cumulative timestamps from request start; chart the deltas.
     const keys = ['dns', 'connect', 'tls', 'ttfb'] as const;
@@ -374,7 +410,19 @@ const dora = [
       );
     }
 
-    const services = s.cost?.by_service ?? [];
+    if (s.cost && s.cost.forecast_month == null) {
+      q('[data-forecast-meta]').textContent = 'Cost Explorer forecasts need more billing history on a new account';
+    }
+
+    // Free-tier services bill $0.00: list what costs money, count the rest.
+    const all = s.cost?.by_service ?? [];
+    const services = all.filter((x) => x.amount >= 0.005);
+    const free = all.length - services.length;
+    if (free > 0) {
+      const note = q('[data-cost-note]');
+      note.textContent = `+ ${free} more service${free === 1 ? '' : 's'} at $0.00 (free tier)`;
+      note.hidden = false;
+    }
     if (services.length) {
       const max = Math.max(...services.map((x) => x.amount), 0.01);
       q('[data-cost-rows]').replaceChildren(

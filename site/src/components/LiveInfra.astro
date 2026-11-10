@@ -5,7 +5,7 @@ const dora = [
   ['Deployment frequency', 'dora.deploys_per_week', 'perWeek', 'dora.deploy_frequency_level'],
   ['Lead time for changes', 'dora.lead_time_h', 'duration', 'dora.lead_time_level'],
   ['Change failure rate', 'dora.change_failure_rate', 'pct', 'dora.change_failure_rate_level'],
-  ['Time to restore', 'dora.time_to_restore_min', 'min', 'dora.time_to_restore_level'],
+  ['Time to restore', 'dora.time_to_restore_min', 'min', 'dora.time_to_restore_level', 'Nothing to restore'],
 ] as const;
 ---
 
@@ -51,7 +51,7 @@ const dora = [
       <p class="stat-label"><Icon name="gauge" />Latency p95 · 24h</p>
       <p class="stat-value" data-live="latency_ms.24h.p95" data-fmt="ms">—</p>
       <svg class="h-8 w-full" aria-hidden="true" data-spark="p95"></svg>
-      <p class="stat-meta">p50 <span data-live="latency_ms.24h.p50" data-fmt="ms">—</span> · trend: daily p95</p>
+      <p class="stat-meta">p50 <span data-live="latency_ms.24h.p50" data-fmt="ms">—</span> · trend: hourly p95</p>
     </article>
 
     <article class="stat">
@@ -64,7 +64,7 @@ const dora = [
     <article class="stat">
       <p class="stat-label"><Icon name="currency-dollar" />AWS cost · this month</p>
       <p class="stat-value" data-live="cost.month_to_date" data-fmt="usd">—</p>
-      <p class="stat-meta mt-auto">forecast <span data-live="cost.forecast_month" data-fmt="usd">—</span> · before credits</p>
+      <p class="stat-meta mt-auto">forecast <span data-live="cost.forecast_month" data-fmt="usd" data-empty="pending">—</span> · before credits</p>
     </article>
 
     <article class="stat">
@@ -82,11 +82,11 @@ const dora = [
     </div>
     <!-- 1px gaps on a line-colored grid draw the dividers at any column count. -->
     <div class="grid grid-cols-2 gap-px bg-line lg:grid-cols-4">
-      {dora.map(([label, path, f, level]) => (
+      {dora.map(([label, path, f, level, empty]) => (
         <div class="bg-surface p-4 sm:p-5">
           <p class="text-sm text-ink-2">{label}</p>
-          <p class="mt-1 text-xl font-semibold tracking-tight" data-live={path} data-fmt={f} data-digits={f === 'pct' ? '1' : undefined}>—</p>
-          <p class="mt-2"><span class="level" data-level={level}>—</span></p>
+          <p class="mt-1 text-xl font-semibold tracking-tight" data-live={path} data-fmt={f} data-digits={f === 'pct' ? '1' : undefined} data-empty={empty}>—</p>
+          <p class="mt-2"><span class="level" data-level={level} data-empty="n/a">—</span></p>
         </div>
       ))}
     </div>
@@ -107,7 +107,7 @@ const dora = [
       if (!s) return;
       fill(root, s);
       fillStates(root, s);
-      sparkline(root.querySelector<SVGSVGElement>('[data-spark="p95"]')!, s.daily.map((d) => d.p95_ms));
+      sparkline(root.querySelector<SVGSVGElement>('[data-spark="p95"]')!, (s.hourly ?? s.daily).map((d) => d.p95_ms));
       budgetMeter(root.querySelector<HTMLElement>('[data-budget]')!, s.error_budget.remaining_ratio);
     });
   }
