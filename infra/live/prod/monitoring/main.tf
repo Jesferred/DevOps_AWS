@@ -69,9 +69,9 @@ provider "aws" {
 }
 
 variable "probes_enabled" {
-  description = "Run the probes. Keep false until the site serves traffic, or the outage before launch burns the error budget."
+  description = "Run the probes. Set to false during planned maintenance that should not count against the SLO."
   type        = bool
-  default     = false
+  default     = true
 }
 
 data "aws_caller_identity" "current" {}

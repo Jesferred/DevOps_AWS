@@ -264,7 +264,14 @@ resource "aws_amplify_app" "site" {
     ignore_changes = [custom_headers]
   }
 
-  # Rules are evaluated top to bottom.
+  # Rules are evaluated top to bottom. The bare-host rule covers "/", which the
+  # <*> form does not match.
+  custom_rule {
+    source = "https://www.${local.domain}"
+    target = "https://${local.domain}"
+    status = "301"
+  }
+
   custom_rule {
     source = "https://www.${local.domain}/<*>"
     target = "https://${local.domain}/<*>"
