@@ -1,22 +1,81 @@
 ---
+import Icon from './Icon.astro';
+import { profile } from '../data/profile';
+
 const nav = [
   { href: '/#live', label: 'Live infra' },
   { href: '/#security', label: 'Security' },
   { href: '/#projects', label: 'Projects' },
   { href: '/status/', label: 'Status' },
-  { href: '/#contact', label: 'Contact' },
 ];
+const path = Astro.url.pathname;
 ---
 
-<header class="sticky top-0 z-40 border-b border-line bg-bg/80 backdrop-blur">
-  <nav class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6" aria-label="Main">
-    <a href="/" class="font-mono text-sm font-semibold">
-      <span class="text-accent">~/</span>kovalov.in
+<header class="sticky top-0 z-40 border-b border-line bg-page/85 backdrop-blur-md">
+  <div class="container-page flex h-16 items-center justify-between gap-4">
+    <a href="/" class="flex items-center gap-2.5 font-semibold tracking-tight" aria-label="kovalov.in, home">
+      <span class="flex size-8 items-center justify-center rounded-lg bg-ink font-mono text-sm text-page">ak</span>
+      <span class="hidden sm:inline">kovalov.in</span>
     </a>
-    <ul class="flex gap-4 text-sm text-muted sm:gap-6">
-      {nav.map((item) => (
-        <li><a href={item.href} class="hover:text-fg">{item.label}</a></li>
-      ))}
-    </ul>
-  </nav>
+
+    <nav aria-label="Main" class="flex items-center gap-1">
+      <ul class="hidden items-center gap-1 md:flex">
+        {nav.map((item) => (
+          <li>
+            <a
+              href={item.href}
+              class="rounded-md px-3 py-2 text-sm text-ink-2 hover:bg-surface hover:text-ink"
+              aria-current={path === item.href ? 'page' : undefined}
+            >
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+      <a href="/status/" class="rounded-md px-3 py-2 text-sm text-ink-2 hover:text-ink md:hidden">Status</a>
+
+      <span class="mx-2 hidden h-6 w-px bg-line sm:block" aria-hidden="true"></span>
+
+      <a href={profile.links.github} class="icon-btn" aria-label="GitHub profile" rel="me">
+        <Icon name="brand-github" />
+      </a>
+      <a href={profile.links.linkedin} class="icon-btn ml-1" aria-label="LinkedIn profile" rel="me">
+        <Icon name="brand-linkedin" />
+      </a>
+      <button type="button" class="icon-btn ml-1" data-theme-toggle aria-label="Toggle color theme">
+        <Icon name="moon" class="theme-icon-moon" />
+        <Icon name="sun" class="theme-icon-sun hidden" />
+      </button>
+    </nav>
+  </div>
 </header>
+
+<script>
+  const root = document.documentElement;
+  const button = document.querySelector<HTMLButtonElement>('[data-theme-toggle]');
+
+  const current = () =>
+    (root.dataset.theme as 'light' | 'dark' | undefined) ??
+    (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+  function render() {
+    const dark = current() === 'dark';
+    button?.querySelector('.theme-icon-moon')?.classList.toggle('hidden', dark);
+    button?.querySelector('.theme-icon-sun')?.classList.toggle('hidden', !dark);
+    button?.setAttribute('aria-pressed', String(dark));
+  }
+
+  button?.addEventListener('click', () => {
+    const next = current() === 'dark' ? 'light' : 'dark';
+    root.dataset.theme = next;
+    try {
+      localStorage.setItem('theme', next);
+    } catch {
+      /* private mode: theme just won't persist */
+    }
+    render();
+    document.dispatchEvent(new CustomEvent('themechange'));
+  });
+
+  render();
+</script>

@@ -6,95 +6,406 @@
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
 
-  --color-bg: var(--bg);
+  --color-page: var(--page);
   --color-surface: var(--surface);
+  --color-raised: var(--raised);
   --color-line: var(--line);
-  --color-fg: var(--fg);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
-  --color-ok: var(--ok);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-wash: var(--accent-wash);
+  --color-good: var(--good);
   --color-warn: var(--warn);
+  --color-bad: var(--bad);
+
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
 }
 
+/* Theme tokens. data-theme on <html> (set by /theme-init.js) wins over the OS
+   setting; components use the tokens only, never a dark: variant.
+   Light. Neutral warm grays, one blue accent; status colors are reserved for state. */
 :root {
-  color-scheme: light dark;
-  --bg: #f8fafc;
-  --surface: #ffffff;
-  --line: #e2e8f0;
-  --fg: #0f172a;
-  --muted: #64748b;
-  --accent: #0d9488;
-  --ok: #059669;
-  --warn: #d97706;
+  color-scheme: light;
+  --page: #f4f4f1;
+  --surface: #fcfcfb;
+  --raised: #ffffff;
+  --line: #e1e0d9;
+  --line-strong: #c3c2b7;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #74726c;
+  --accent: #2a78d6;
+  --accent-ink: #1c5cab; /* links and accent text: 6.4:1 on surface */
+  --accent-wash: #cde2fb;
+  --good: #0ca30c;
+  --warn: #fab219;
+  --bad: #d03b3b;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --budget-track: #cde2fb;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b1220;
-    --surface: #111a2e;
-    --line: #1e2a44;
-    --fg: #e2e8f0;
-    --muted: #8b9ab3;
-    --accent: #2dd4bf;
-    --ok: #34d399;
-    --warn: #fbbf24;
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --raised: #222221;
+    --line: #2c2c2a;
+    --line-strong: #383835;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #9a988f;
+    --accent: #3987e5;
+    --accent-ink: #86b6ef;
+    --accent-wash: #184f95;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --budget-track: #104281;
   }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --raised: #222221;
+  --line: #2c2c2a;
+  --line-strong: #383835;
+  --ink: #f0efec;
+  --ink-2: #c3c2b7;
+  --muted: #9a988f;
+  --accent: #3987e5;
+  --accent-ink: #86b6ef;
+  --accent-wash: #184f95;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --budget-track: #104281;
 }
 
 @layer base {
   html {
     scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
-    @apply bg-bg text-fg font-sans antialiased;
+    @apply bg-page font-sans text-ink antialiased;
+    font-feature-settings: "cv11", "ss01";
   }
 
   ::selection {
-    @apply bg-accent/30;
+    background: var(--accent-wash);
   }
 
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-accent;
+    @apply rounded-sm outline-2 outline-offset-2 outline-accent;
+  }
+
+  a {
+    @apply transition-colors;
   }
 }
 
-/* Long-form text (status page methodology). */
+/* --- Layout primitives --------------------------------------------------- */
+
+.container-page {
+  @apply mx-auto w-full max-w-6xl px-4 sm:px-6;
+}
+
+.section {
+  @apply scroll-mt-20 py-10 sm:py-14;
+}
+
+.eyebrow {
+  @apply font-mono text-xs font-medium tracking-wide text-muted uppercase;
+}
+
+.section-title {
+  @apply mt-2 text-2xl font-semibold tracking-tight text-balance sm:text-3xl;
+}
+
+.section-lede {
+  @apply mt-3 max-w-2xl text-pretty text-ink-2;
+}
+
+.card {
+  @apply rounded-2xl border border-line bg-surface;
+}
+
+.link {
+  @apply text-accent-ink underline decoration-1 underline-offset-4 hover:decoration-2;
+}
+
+/* --- Buttons ------------------------------------------------------------- */
+
+.btn {
+  @apply inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-medium transition-colors;
+}
+
+.btn-primary {
+  @apply bg-ink text-page hover:opacity-90;
+}
+
+.btn-ghost {
+  @apply border border-line bg-surface text-ink hover:border-line-strong hover:bg-raised;
+}
+
+/* Square icon button: GitHub, LinkedIn, theme toggle. */
+.icon-btn {
+  @apply inline-flex size-10 items-center justify-center rounded-lg border border-line bg-surface text-ink-2 transition-colors hover:border-line-strong hover:text-ink;
+}
+
+.chip {
+  @apply inline-flex items-center rounded-md border border-line bg-surface px-2 py-0.5 font-mono text-xs text-ink-2;
+}
+
+/* --- Status (always dot/icon + text, never color alone) ------------------ */
+
+.status-dot {
+  @apply inline-block size-2 shrink-0 rounded-full bg-muted;
+}
+
+[data-health="operational"] .status-dot,
+[data-state="pass"] > .status-dot,
+.status-dot[data-state="good"] {
+  @apply bg-good;
+}
+
+[data-health="degraded"] .status-dot,
+[data-health="stale"] .status-dot,
+.status-dot[data-state="warn"] {
+  @apply bg-warn;
+}
+
+[data-state="fail"] > .status-dot,
+.status-dot[data-state="bad"] {
+  @apply bg-bad;
+}
+
+[data-health="operational"] .status-dot {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--good) 20%, transparent);
+}
+
+.health-pill {
+  @apply inline-flex h-8 items-center gap-2 rounded-full border border-line bg-surface px-3 text-xs font-medium text-ink-2;
+}
+
+/* Security controls checklist. */
+.check {
+  @apply flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 text-sm text-ink;
+}
+
+.check-icon {
+  @apply flex size-5 shrink-0 items-center justify-center rounded-full border border-line-strong text-[11px] font-bold text-muted;
+}
+
+.check[data-state="pass"] .check-icon {
+  @apply border-transparent bg-good text-white;
+}
+
+.check[data-state="fail"] .check-icon {
+  @apply border-transparent bg-warn text-ink;
+}
+
+.check-state {
+  @apply ml-auto font-mono text-xs text-muted;
+}
+
+/* DORA performance level: dot carries severity, label carries meaning. */
+.level {
+  @apply inline-flex items-center gap-1.5 font-mono text-[11px] font-medium tracking-wide text-ink-2 uppercase;
+}
+
+.level::before {
+  content: "";
+  @apply inline-block size-1.5 rounded-full bg-line-strong;
+}
+
+.level[data-state="elite"]::before,
+.level[data-state="high"]::before {
+  @apply bg-good;
+}
+
+.level[data-state="medium"]::before {
+  @apply bg-warn;
+}
+
+.level[data-state="low"]::before {
+  @apply bg-bad;
+}
+
+/* --- Stat tiles ---------------------------------------------------------- */
+
+.stat {
+  @apply flex min-w-0 flex-col gap-1 rounded-2xl border border-line bg-surface p-4 sm:p-5;
+}
+
+.stat-label {
+  @apply flex items-center gap-2 text-sm text-ink-2;
+}
+
+.stat-label svg {
+  @apply size-4 text-muted;
+}
+
+.stat-value {
+  @apply mt-1 text-2xl font-semibold tracking-tight text-ink sm:text-3xl;
+}
+
+.stat-meta {
+  @apply font-mono text-xs text-muted;
+}
+
+.stat-meta a {
+  @apply text-accent-ink hover:underline;
+}
+
+/* --- Charts -------------------------------------------------------------- */
+
+.chart-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.chart-axis {
+  @apply fill-muted font-sans text-[11px];
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--series-1);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-area {
+  fill: var(--series-1);
+  opacity: 0.1;
+}
+
+.chart-dot {
+  fill: var(--series-1);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.chart-crosshair {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.chart-target {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+/* Uptime strip: one bar per day, state from the SLO. */
+.day {
+  fill: var(--line);
+  transition: opacity 120ms;
+}
+
+.day[data-state="good"] { fill: var(--good); }
+.day[data-state="warn"] { fill: var(--warn); }
+.day[data-state="bad"] { fill: var(--bad); }
+.day:hover, .day:focus-visible { opacity: 0.75; outline: none; }
+
+.seg-1 { fill: var(--series-1); }
+.seg-2 { fill: var(--series-2); }
+.seg-3 { fill: var(--series-3); }
+.seg-4 { fill: var(--series-4); }
+.key-1 { background: var(--series-1); }
+.key-2 { background: var(--series-2); }
+.key-3 { background: var(--series-3); }
+.key-4 { background: var(--series-4); }
+
+/* Meter: the unfilled track is a lighter step of the fill's own ramp. */
+.meter { @apply h-2 w-full overflow-hidden rounded-full; background: var(--budget-track); }
+.meter-fill { @apply h-full rounded-full bg-accent transition-[width] duration-500; width: var(--w, 0%); }
+.meter-fill[data-state="warn"] { @apply bg-warn; }
+.meter-fill[data-state="bad"] { @apply bg-bad; }
+
+.spark-line {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.spark-end {
+  fill: var(--accent);
+}
+
+/* Shared tooltip, positioned by charts.ts via CSS custom properties on a class. */
+.tooltip {
+  @apply pointer-events-none fixed z-50 min-w-36 rounded-lg border border-line bg-raised px-3 py-2 text-xs shadow-lg;
+  left: 0;
+  top: 0;
+  translate: var(--tx, -9999px) var(--ty, -9999px);
+}
+
+.tooltip-value {
+  @apply text-sm font-semibold text-ink;
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip-label {
+  @apply text-muted;
+}
+
+/* Data tables (also the accessible view of every chart). */
+.data-table {
+  @apply w-full text-left text-sm;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table th {
+  @apply border-b border-line pb-2 text-xs font-medium text-muted;
+}
+
+.data-table td {
+  @apply border-b border-line py-2.5 pr-4 text-ink;
+}
+
+.data-table tr:last-child td {
+  @apply border-b-0;
+}
+
+details.table-view summary {
+  @apply cursor-pointer font-mono text-xs text-muted select-none hover:text-ink;
+}
+
+/* --- Long-form text (status methodology) --------------------------------- */
+
 .prose {
-  @apply max-w-none leading-7 text-fg;
+  @apply max-w-3xl leading-7 text-ink-2;
 
-  & h2 { @apply mb-3 text-2xl font-semibold tracking-tight; }
-  & ul { @apply my-4 list-disc space-y-2 pl-6; }
-  & strong { @apply font-semibold; }
-  & :not(pre) > code { @apply rounded bg-surface px-1.5 py-0.5 font-mono text-[0.9em] ring-1 ring-line; }
+  & h2 { @apply mb-3 text-2xl font-semibold tracking-tight text-ink; }
+  & ul { @apply my-4 list-disc space-y-3 pl-5; }
+  & strong { @apply font-semibold text-ink; }
+  & code { @apply rounded bg-raised px-1.5 py-0.5 font-mono text-[0.85em] ring-1 ring-line; }
 }
 
-/* Health badge: state comes from the data-health attribute set by live.ts. */
-.health-badge {
-  @apply inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 font-mono text-xs text-muted hover:text-fg;
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { transition: none !important; animation: none !important; }
 }
-.health-dot {
-  @apply inline-block size-2 rounded-full bg-muted;
-}
-[data-health="operational"] .health-dot { @apply bg-ok; }
-[data-health="degraded"] .health-dot { @apply bg-warn animate-pulse; }
-[data-health="stale"] .health-dot { @apply bg-warn; }
 
-/* Bars driven by data-level, never by inline style. */
-.day-ok { @apply fill-ok; }
-.day-warn { @apply fill-warn; }
-.day-bad { @apply fill-red-500; }
-.day-none { @apply fill-line; }
-
-/* Pass/fail checks and DORA levels, set by fillStates() in live.ts. */
-.check { @apply inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 text-sm; }
-.check::before { content: "…"; @apply font-mono text-muted; }
-.check[data-state="pass"]::before { content: "✓"; @apply text-ok; }
-.check[data-state="fail"]::before { content: "✗"; @apply text-warn; }
-.level { @apply rounded px-1.5 py-0.5 font-mono text-[11px] uppercase tracking-wide ring-1 ring-line text-muted; }
-.level[data-state="elite"] { @apply text-ok ring-ok/50; }
-.level[data-state="high"] { @apply text-accent ring-accent/50; }
-.level[data-state="medium"], .level[data-state="low"] { @apply text-warn ring-warn/50; }
-.grade { @apply font-mono text-6xl font-bold tracking-tight text-muted; }
-.grade[data-state="pass"] { @apply text-ok; }
-.grade[data-state="fail"] { @apply text-warn; }
+/* Horizontal bar list (cost by service): one series, value at the bar tip. */
+.hbar { @apply h-3 rounded-r-[4px] bg-series-1; width: var(--w, 0%); min-width: 2px; }

@@ -1,12 +1,16 @@
 ---
 import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
 ---
 
-<Base title="404 · kovalov.in" description="Page not found">
-  <section class="py-24">
-    <p class="font-mono text-sm text-accent">HTTP 404</p>
-    <h1 class="mt-3 text-4xl font-bold tracking-tight">Nothing here.</h1>
-    <p class="mt-4 text-muted">The page may have moved. The error budget is fine, though.</p>
-    <a href="/" class="mt-8 inline-block rounded-lg bg-accent px-5 py-2.5 font-medium text-bg">Back home</a>
+<Base title="Not found · kovalov.in" description="Page not found">
+  <section class="container-page py-24 sm:py-32">
+    <p class="eyebrow">HTTP 404</p>
+    <h1 class="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">Nothing at this path.</h1>
+    <p class="mt-4 max-w-lg text-ink-2">The page may have moved. Don't worry, a 404 doesn't count against the error budget.</p>
+    <div class="mt-8 flex flex-wrap gap-3">
+      <a href="/" class="btn btn-primary"><Icon name="arrow-left" size={18} />Home</a>
+      <a href="/status/" class="btn btn-ghost"><Icon name="activity" size={18} />Status</a>
+    </div>
   </section>
 </Base>

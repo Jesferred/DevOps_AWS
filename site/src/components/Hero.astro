@@ -1,21 +1,84 @@
 ---
+import Icon from './Icon.astro';
 import { profile } from '../data/profile';
+
+const sha = import.meta.env.PUBLIC_DEPLOY_SHA as string | undefined;
+const deployedAt = import.meta.env.PUBLIC_DEPLOY_TIME as string | undefined;
 ---
 
-<section class="py-16 sm:py-24">
-  <p class="font-mono text-sm text-accent">$ whoami</p>
-  <h1 class="mt-3 text-4xl font-bold tracking-tight sm:text-6xl">{profile.name}</h1>
-  <p class="mt-2 text-xl text-muted sm:text-2xl">{profile.role}</p>
-  <p class="mt-6 max-w-2xl text-lg leading-8">{profile.headline}</p>
+<section class="container-page grid items-center gap-10 pt-12 pb-6 sm:pt-20 sm:pb-10 lg:grid-cols-[1.15fr_1fr] lg:gap-16" data-hero-root>
+  <div>
+    <p class="eyebrow">{profile.role} · {profile.location}</p>
+    <h1 class="mt-4 text-4xl font-semibold tracking-tight text-balance sm:text-6xl">{profile.name}</h1>
+    <p class="mt-5 max-w-xl text-lg leading-8 text-pretty text-ink-2">{profile.headline}</p>
 
-  <ul class="mt-8 flex flex-wrap gap-2" aria-label="Skills">
-    {profile.skills.map((s) => (
-      <li class="rounded-full border border-line bg-surface px-3 py-1 font-mono text-xs text-muted">{s}</li>
-    ))}
-  </ul>
+    <div class="mt-8 flex flex-wrap items-center gap-3">
+      <a href="/status/" class="btn btn-primary">
+        <Icon name="activity" size={18} />
+        Live status & SLOs
+      </a>
+      <a href={profile.links.github} class="btn btn-ghost" rel="me">
+        <Icon name="brand-github" size={18} />
+        GitHub
+      </a>
+      <a href={profile.links.linkedin} class="btn btn-ghost" rel="me">
+        <Icon name="brand-linkedin" size={18} />
+        LinkedIn
+      </a>
+    </div>
 
-  <div class="mt-10 flex flex-wrap gap-3">
-    <a href="#projects" class="rounded-lg bg-accent px-5 py-2.5 font-medium text-bg hover:opacity-90">See the work</a>
-    <a href={profile.links.github} class="rounded-lg border border-line px-5 py-2.5 font-medium hover:bg-surface">GitHub</a>
+    <ul class="mt-8 flex flex-wrap gap-1.5" aria-label="Skills">
+      {profile.skills.map((s) => <li class="chip">{s}</li>)}
+    </ul>
   </div>
+
+  <!-- Live readout: the site reporting on itself. -->
+  <aside class="card overflow-hidden shadow-sm" aria-label="This site, right now">
+    <div class="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
+      <span class="font-mono text-xs text-muted">kovalov.in · production</span>
+      <span class="health-pill" data-health="unknown">
+        <span class="status-dot"></span>
+        <span data-health-text>Collecting data</span>
+      </span>
+    </div>
+    <dl class="divide-y divide-line">
+      <div class="flex items-baseline justify-between gap-4 px-5 py-4">
+        <dt class="text-sm text-ink-2">Uptime · 30 days</dt>
+        <dd class="text-2xl font-semibold tracking-tight" data-live="availability.30d" data-fmt="pct">—</dd>
+      </div>
+      <div class="flex items-baseline justify-between gap-4 px-5 py-4">
+        <dt class="text-sm text-ink-2">Latency p95 · 24h</dt>
+        <dd class="text-2xl font-semibold tracking-tight" data-live="latency_ms.24h.p95" data-fmt="ms">—</dd>
+      </div>
+      <div class="flex items-baseline justify-between gap-4 px-5 py-4">
+        <dt class="text-sm text-ink-2">Error budget left</dt>
+        <dd class="text-2xl font-semibold tracking-tight" data-live="error_budget.remaining_min" data-fmt="min">—</dd>
+      </div>
+      <div class="flex items-baseline justify-between gap-4 px-5 py-4">
+        <dt class="text-sm text-ink-2">Last deploy</dt>
+        <dd class="text-right font-mono text-sm">
+          {deployedAt ? (
+            <time datetime={deployedAt} data-ago>{deployedAt.slice(0, 16).replace('T', ' ')} UTC</time>
+          ) : (
+            'local build'
+          )}
+          {sha && <span class="ml-2 text-muted">{sha.slice(0, 7)}</span>}
+        </dd>
+      </div>
+    </dl>
+  </aside>
 </section>
+
+<script>
+  import { fill, fmt, health, loadStatus, setHealth } from '../scripts/live';
+
+  const root = document.querySelector<HTMLElement>('[data-hero-root]');
+  const time = root?.querySelector<HTMLTimeElement>('[data-ago]');
+  if (time) time.textContent = fmt.ago(time.dateTime);
+  if (root) {
+    loadStatus().then((s) => {
+      if (s) fill(root, s);
+      setHealth(root, health(s));
+    });
+  }
+</script>
