@@ -32,6 +32,8 @@ locals {
   bucket_name = "kovalov-in-site-prod-${data.aws_caller_identity.current.account_id}"
   release_key = "releases/site.zip"
 
+  custom_headers_file = "${path.module}/custom-headers.yml"
+
   # Hosted zone ID of every CloudFront distribution, used for alias records.
   cloudfront_zone_id = "Z2FDTNDATAQYW2"
 
@@ -251,11 +253,15 @@ resource "aws_amplify_app" "site" {
   name        = "kovalov-in-prod"
   description = "kovalov.in, deployed from CI as zip releases"
   platform    = "WEB"
-  # Amplify stores headers as JSON; sending JSON avoids a permanent YAML-vs-JSON diff.
-  custom_headers = jsonencode(yamldecode(file("${path.module}/custom-headers.yml")).customHeaders)
+  # Initial value only; updates go through terraform_data.custom_headers below.
+  custom_headers = file(local.custom_headers_file)
 
   cache_config {
     type = "AMPLIFY_MANAGED_NO_COOKIES"
+  }
+
+  lifecycle {
+    ignore_changes = [custom_headers]
   }
 
   # Rules are evaluated top to bottom.
@@ -277,6 +283,18 @@ resource "aws_amplify_app" "site" {
     source = "/<*>"
     target = "/404.html"
     status = "404"
+  }
+}
+
+# The Amplify API accepts headers only as YAML with a top-level `customHeaders`
+# key but returns them as a bare JSON array, so the attribute can never match
+# its own config and would show a diff on every plan. Terraform ignores it and
+# pushes the file through the API whenever its content changes.
+resource "terraform_data" "custom_headers" {
+  triggers_replace = [aws_amplify_app.site.id, filesha256(local.custom_headers_file)]
+
+  provisioner "local-exec" {
+    command = "aws amplify update-app --region eu-central-1 --app-id ${aws_amplify_app.site.id} --custom-headers file://${local.custom_headers_file} --query app.appId --output text"
   }
 }
 
