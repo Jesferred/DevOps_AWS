@@ -50,7 +50,8 @@ jobs:
         env:
           ASTRO_TELEMETRY_DISABLED: "1"
           PUBLIC_DEPLOY_SHA: ${{ github.sha }}
-          PUBLIC_DEPLOY_TIME: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}
+          # Manual runs have no head_commit; fall back to the run start time.
+          PUBLIC_DEPLOY_TIME: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at || github.run_started_at }}
           PUBLIC_DEPLOY_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
       # Strict CSP forbids inline scripts and styles; fail the build if any slip in.
