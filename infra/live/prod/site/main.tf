@@ -417,6 +417,14 @@ data "aws_iam_policy_document" "deploy" {
     resources = ["${aws_s3_bucket.site.arn}/${local.release_key}"]
   }
 
+  # StartDeployment checks these on the caller's behalf before Amplify reads the
+  # zip (it sets an object ACL; a no-op here since ACLs are disabled).
+  statement {
+    sid       = "LetAmplifyReadRelease"
+    actions   = ["s3:GetObjectAcl", "s3:PutObjectAcl"]
+    resources = ["${aws_s3_bucket.site.arn}/${local.release_key}"]
+  }
+
   statement {
     sid       = "ReadReleaseHistory"
     actions   = ["s3:GetObjectVersion", "s3:ListBucketVersions"]
