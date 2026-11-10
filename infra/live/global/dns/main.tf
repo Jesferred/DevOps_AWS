@@ -58,6 +58,7 @@ module "dns" {
   # Only Amazon (ACM) may issue certificates; no wildcard certificates at all.
   caa_records = [
     "0 issue \"amazon.com\"",
+    "0 issue \"amazontrust.com\"", # Amplify Hosting checks for this one explicitly
     "0 issuewild \";\"",
   ]
 }

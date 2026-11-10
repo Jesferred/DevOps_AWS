@@ -1,8 +1,8 @@
 name: terraform
 
 on:
+  # No path filter on PRs: these are required checks and must always report.
   pull_request:
-    paths: ["infra/**", ".github/workflows/terraform.yml"]
   push:
     branches: [main]
     paths: ["infra/**", ".github/workflows/terraform.yml"]
@@ -20,6 +20,8 @@ env:
   TF_VERSION: 1.13.4
   AWS_REGION: eu-central-1
   TF_IN_AUTOMATION: "true"
+  # Kept out of the public repo; set under Settings > Secrets and variables > Variables.
+  TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
 
 jobs:
   fmt:
@@ -41,7 +43,9 @@ jobs:
           - infra/bootstrap
           - infra/live/global/dns
           - infra/live/global/github-oidc
+          - infra/live/global/alerting
           - infra/live/prod/site
+          - infra/live/prod/monitoring
     defaults:
       run:
         working-directory: ${{ matrix.stack }}
@@ -75,6 +79,17 @@ jobs:
           # 0 = no changes, 2 = changes present; anything else is a failure
           [ "${code:-0}" -ne 1 ]
 
+  # Single required check for branch protection, independent of the stack list.
+  terraform:
+    needs: [fmt, plan]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: All plans succeeded
+        run: |
+          echo "fmt=${{ needs.fmt.result }} plan=${{ needs.plan.result }}"
+          [ "${{ needs.fmt.result }}" = success ] && [ "${{ needs.plan.result }}" = success ]
+
   # Runs only on main and waits for manual approval in the `production` environment.
   apply:
     needs: plan
@@ -87,9 +102,13 @@ jobs:
         infra/bootstrap
         infra/live/global/dns
         infra/live/global/github-oidc
+        infra/live/global/alerting
         infra/live/prod/site
+        infra/live/prod/monitoring
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history for DORA lead time
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -103,6 +122,7 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: terraform apply
+        id: apply
         run: |
           for stack in $STACKS; do
             echo "::group::$stack"
@@ -111,9 +131,19 @@ jobs:
             terraform -chdir="$stack" plan -input=false -detailed-exitcode -out=tfplan || code=$?
             case $code in
               0) echo "no changes" ;;
-              2) terraform -chdir="$stack" apply -input=false tfplan
+              2) echo "applied=true" >> "$GITHUB_OUTPUT"
+                 terraform -chdir="$stack" apply -input=false tfplan
                  echo "- \`$stack\`: applied" >> "$GITHUB_STEP_SUMMARY" ;;
               *) exit "$code" ;;
             esac
             echo "::endgroup::"
           done
+
+      # DORA: only runs that changed production count as deployments.
+      - name: Record deployment
+        if: always() && steps.apply.outputs.applied == 'true' && job.status != 'cancelled'
+        continue-on-error: true
+        env:
+          STATUS: ${{ job.status }}
+          BEFORE: ${{ github.event.before }}
+        run: .github/scripts/record-deployment.sh infra "$STATUS" "$(.github/scripts/commit-time.sh)"

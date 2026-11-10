@@ -1,0 +1,63 @@
+name: rollback
+
+# Redeploys an earlier release without rebuilding: the chosen version of
+# releases/site.zip is copied over the current one and deployed to Amplify.
+# The bucket keeps at least the 5 most recent releases (see infra/live/prod/site).
+on:
+  workflow_dispatch:
+    inputs:
+      releases_back:
+        description: "How many releases back (1 = the one before the current)"
+        required: true
+        default: "1"
+        type: choice
+        options: ["1", "2", "3", "4", "5"]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: site-refs/heads/main # never overlaps with a regular deploy
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://kovalov.in
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::524941137773:role/gha-deploy-site-prod
+          role-session-name: gha-rollback-site-${{ github.run_id }}
+          aws-region: eu-central-1
+
+      - name: Restore release
+        id: restore
+        env:
+          BACK: ${{ inputs.releases_back }}
+        run: |
+          bucket=$(aws ssm get-parameter --name /kovalov-in/prod/site/bucket --query Parameter.Value --output text)
+          # Versions newest first; index 0 is the live release.
+          version=$(aws s3api list-object-versions --bucket "$bucket" --prefix releases/site.zip \
+            --query "sort_by(Versions[?Key=='releases/site.zip'], &LastModified)[::-1][$BACK].VersionId" --output text)
+          if [ -z "$version" ] || [ "$version" = None ]; then
+            echo "::error::No release $BACK versions back"; exit 1
+          fi
+          sha=$(aws s3api head-object --bucket "$bucket" --key releases/site.zip --version-id "$version" \
+            --query Metadata.sha --output text)
+          aws s3api copy-object --bucket "$bucket" --key releases/site.zip \
+            --copy-source "$bucket/releases/site.zip?versionId=$version" --metadata-directive COPY >/dev/null
+          echo "bucket=$bucket" >> "$GITHUB_OUTPUT"
+          echo "Rolled back to \`${sha::7}\` (version \`$version\`)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Deploy to Amplify
+        env:
+          BUCKET: ${{ steps.restore.outputs.bucket }}
+        run: .github/scripts/amplify-deploy.sh "$BUCKET"

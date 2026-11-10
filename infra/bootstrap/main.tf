@@ -75,7 +75,9 @@ resource "aws_s3_bucket_ownership_controls" "state" {
   }
 }
 
-# Keep old state versions for 90 days, then expire them to keep storage cost near zero.
+# A noncurrent state version is expired only when it is older than 90 days AND
+# at least 5 newer versions exist, so a project left untouched for a year still
+# has its last 5 states to roll back to.
 resource "aws_s3_bucket_lifecycle_configuration" "state" {
   bucket = aws_s3_bucket.state.id
 
@@ -86,7 +88,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
     filter {}
 
     noncurrent_version_expiration {
-      noncurrent_days = 90
+      noncurrent_days           = 90
+      newer_noncurrent_versions = 5
     }
 
     abort_incomplete_multipart_upload {

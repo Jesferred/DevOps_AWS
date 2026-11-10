@@ -1,5 +1,11 @@
-# Static site: private S3 origin behind CloudFront (OAC), TLS from ACM,
-# security headers at the edge, and a least-privilege deploy role for CI.
+# Static site on AWS Amplify Hosting (manual deployments, no Git connection).
+#
+#   CI build --> s3://<bucket>/releases/site.zip (versioned, last 5 kept) --> Amplify deployment
+#   Visitor --> Route 53 --> Amplify (AWS-managed CloudFront, our ACM cert, security headers)
+#                              '-- /live/* reverse-proxied to s3://<bucket>/live/ (monitoring JSON)
+#
+# Amplify replaced a self-managed CloudFront distribution: this account is not
+# allowed to create CloudFront resources (see docs/adr/0007).
 
 terraform {
   required_version = ">= 1.11"
@@ -22,9 +28,12 @@ terraform {
 
 locals {
   domain      = "kovalov.in"
-  aliases     = [local.domain, "www.${local.domain}"]
   repo        = "Jesferred@44315534/DevOps_AWS@1433110978"
   bucket_name = "kovalov-in-site-prod-${data.aws_caller_identity.current.account_id}"
+  release_key = "releases/site.zip"
+
+  # Hosted zone ID of every CloudFront distribution, used for alias records.
+  cloudfront_zone_id = "Z2FDTNDATAQYW2"
 
   default_tags = {
     Project     = "kovalov-in"
@@ -42,7 +51,7 @@ provider "aws" {
   }
 }
 
-# CloudFront only accepts ACM certificates from us-east-1.
+# Certificates for CloudFront-backed endpoints, Amplify included, must live in us-east-1.
 provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"
@@ -60,6 +69,9 @@ data "aws_route53_zone" "this" {
 
 # --- TLS certificate ---
 
+# Our own certificate instead of an Amplify-managed one: Amplify's managed
+# certificate includes a wildcard, which the zone's CAA record (`issuewild ";"`)
+# forbids on purpose.
 resource "aws_acm_certificate" "site" {
   provider = aws.us_east_1
 
@@ -93,19 +105,22 @@ resource "aws_acm_certificate_validation" "site" {
   validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
 }
 
-# --- Origin bucket ---
+# --- Release and live-data bucket ---
+#   releases/  private, versioned: one object version per deploy, read by Amplify
+#   live/      public-read JSON written by the monitoring aggregator
 
 resource "aws_s3_bucket" "site" {
   bucket = local.bucket_name
 }
 
+# Public access is allowed by policy only (for live/*); ACLs stay disabled.
 resource "aws_s3_bucket_public_access_block" "site" {
   bucket = aws_s3_bucket.site.id
 
   block_public_acls       = true
-  block_public_policy     = true
+  block_public_policy     = false
   ignore_public_acls      = true
-  restrict_public_buckets = true
+  restrict_public_buckets = false
 }
 
 resource "aws_s3_bucket_ownership_controls" "site" {
@@ -126,7 +141,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "site" {
   }
 }
 
-# Versioning gives instant rollback of a bad deploy; old versions expire after 30 days.
+# Every deploy is a new version of releases/site.zip, so rolling back means
+# restoring an older version (see .github/workflows/rollback.yml).
 resource "aws_s3_bucket_versioning" "site" {
   bucket = aws_s3_bucket.site.id
 
@@ -138,6 +154,8 @@ resource "aws_s3_bucket_versioning" "site" {
 resource "aws_s3_bucket_lifecycle_configuration" "site" {
   bucket = aws_s3_bucket.site.id
 
+  # Releases: expire only when older than 90 days AND beyond the 5 most recent,
+  # so a site untouched for a year still has 5 releases to roll back to.
   rule {
     id     = "expire-noncurrent-versions"
     status = "Enabled"
@@ -145,30 +163,59 @@ resource "aws_s3_bucket_lifecycle_configuration" "site" {
     filter {}
 
     noncurrent_version_expiration {
-      noncurrent_days = 30
+      noncurrent_days           = 90
+      newer_noncurrent_versions = 5
     }
 
     abort_incomplete_multipart_upload {
       days_after_initiation = 1
     }
   }
+
+  # status.json is rewritten every 5 minutes; its history has no value.
+  rule {
+    id     = "expire-live-data-history"
+    status = "Enabled"
+
+    filter {
+      prefix = "live/"
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
 }
 
 data "aws_iam_policy_document" "site_bucket" {
+  # Amplify's pre-flight check rejects aws:SourceArn conditions, so access is
+  # scoped to this account's Amplify apps and the releases/ prefix.
   statement {
-    sid       = "AllowCloudFrontRead"
+    sid       = "AmplifyReadReleases"
     actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.site.arn}/*"]
+    resources = ["${aws_s3_bucket.site.arn}/releases/*"]
 
     principals {
       type        = "Service"
-      identifiers = ["cloudfront.amazonaws.com"]
+      identifiers = ["amplify.amazonaws.com"]
     }
 
     condition {
       test     = "StringEquals"
-      variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.site.arn]
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
+
+  # Monitoring data shown on the site; public by design, proxied by Amplify.
+  statement {
+    sid       = "PublicReadLiveData"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.site.arn}/live/*"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
     }
   }
 
@@ -198,179 +245,110 @@ resource "aws_s3_bucket_policy" "site" {
   depends_on = [aws_s3_bucket_public_access_block.site]
 }
 
-# --- CloudFront ---
+# --- Amplify Hosting ---
 
-resource "aws_cloudfront_origin_access_control" "site" {
-  name                              = local.bucket_name
-  origin_access_control_origin_type = "s3"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
-}
+resource "aws_amplify_app" "site" {
+  name           = "kovalov-in-prod"
+  description    = "kovalov.in, deployed from CI as zip releases"
+  platform       = "WEB"
+  custom_headers = file("${path.module}/custom-headers.yml")
 
-# Redirects www to the apex and maps directory URLs to index.html.
-resource "aws_cloudfront_function" "viewer_request" {
-  name    = "kovalov-in-prod-viewer-request"
-  runtime = "cloudfront-js-2.0"
-  comment = "www -> apex redirect, directory index rewrite"
-  publish = true
-  code    = file("${path.module}/viewer-request.js")
-}
-
-data "aws_cloudfront_cache_policy" "caching_optimized" {
-  name = "Managed-CachingOptimized"
-}
-
-resource "aws_cloudfront_response_headers_policy" "security" {
-  name    = "kovalov-in-prod-security-headers"
-  comment = "HSTS preload, strict CSP and hardening headers"
-
-  security_headers_config {
-    strict_transport_security {
-      access_control_max_age_sec = 63072000
-      include_subdomains         = true
-      preload                    = true
-      override                   = true
-    }
-
-    content_security_policy {
-      content_security_policy = join("; ", [
-        "default-src 'self'",
-        "script-src 'self'",
-        "style-src 'self'",
-        "img-src 'self' data:",
-        "font-src 'self'",
-        "connect-src 'self'",
-        "object-src 'none'",
-        "base-uri 'self'",
-        "form-action 'self'",
-        "frame-ancestors 'none'",
-        "upgrade-insecure-requests",
-      ])
-      override = true
-    }
-
-    content_type_options {
-      override = true
-    }
-
-    frame_options {
-      frame_option = "DENY"
-      override     = true
-    }
-
-    referrer_policy {
-      referrer_policy = "strict-origin-when-cross-origin"
-      override        = true
-    }
+  cache_config {
+    type = "AMPLIFY_MANAGED_NO_COOKIES"
   }
 
-  custom_headers_config {
-    items {
-      header   = "Permissions-Policy"
-      value    = "camera=(), microphone=(), geolocation=(), interest-cohort=()"
-      override = true
-    }
-
-    items {
-      header   = "Cross-Origin-Opener-Policy"
-      value    = "same-origin"
-      override = true
-    }
+  # Rules are evaluated top to bottom.
+  custom_rule {
+    source = "https://www.${local.domain}/<*>"
+    target = "https://${local.domain}/<*>"
+    status = "301"
   }
 
-  remove_headers_config {
-    items {
-      header = "Server"
-    }
+  # Reverse proxy keeps the JSON same-origin, so the CSP stays `connect-src 'self'`.
+  custom_rule {
+    source = "/live/<*>"
+    target = "https://${aws_s3_bucket.site.bucket_regional_domain_name}/live/<*>"
+    status = "200"
+  }
+
+  # Applied only when no file matches the path.
+  custom_rule {
+    source = "/<*>"
+    target = "/404.html"
+    status = "404"
   }
 }
 
-resource "aws_cloudfront_distribution" "site" {
-  enabled             = true
-  is_ipv6_enabled     = true
-  http_version        = "http2and3"
-  comment             = local.domain
-  aliases             = local.aliases
-  default_root_object = "index.html"
-  # North America + Europe edges only: cheapest tier.
-  price_class = "PriceClass_100"
+resource "aws_amplify_branch" "main" {
+  app_id            = aws_amplify_app.site.id
+  branch_name       = "main"
+  stage             = "PRODUCTION"
+  enable_auto_build = false
+}
 
-  origin {
-    origin_id                = "s3-site"
-    domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
-    origin_access_control_id = aws_cloudfront_origin_access_control.site.id
+resource "aws_amplify_domain_association" "site" {
+  app_id                 = aws_amplify_app.site.id
+  domain_name            = local.domain
+  enable_auto_sub_domain = false
+  wait_for_verification  = true
+
+  certificate_settings {
+    type                   = "CUSTOM"
+    custom_certificate_arn = aws_acm_certificate_validation.site.certificate_arn
   }
 
-  default_cache_behavior {
-    target_origin_id           = "s3-site"
-    viewer_protocol_policy     = "redirect-to-https"
-    allowed_methods            = ["GET", "HEAD"]
-    cached_methods             = ["GET", "HEAD"]
-    compress                   = true
-    cache_policy_id            = data.aws_cloudfront_cache_policy.caching_optimized.id
-    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
-
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.viewer_request.arn
-    }
+  sub_domain {
+    branch_name = aws_amplify_branch.main.branch_name
+    prefix      = ""
   }
 
-  # Without s3:ListBucket, S3 answers 403 for missing keys; serve the 404 page instead.
-  custom_error_response {
-    error_code            = 403
-    response_code         = 404
-    response_page_path    = "/404.html"
-    error_caching_min_ttl = 60
-  }
-
-  custom_error_response {
-    error_code            = 404
-    response_code         = 404
-    response_page_path    = "/404.html"
-    error_caching_min_ttl = 60
-  }
-
-  restrictions {
-    geo_restriction {
-      restriction_type = "none"
-    }
-  }
-
-  viewer_certificate {
-    acm_certificate_arn      = aws_acm_certificate_validation.site.certificate_arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2021"
+  sub_domain {
+    branch_name = aws_amplify_branch.main.branch_name
+    prefix      = "www"
   }
 }
 
 # --- DNS ---
 
-resource "aws_route53_record" "site" {
-  for_each = {
-    for pair in setproduct(local.aliases, ["A", "AAAA"]) : "${pair[0]}-${pair[1]}" => {
-      name = pair[0]
-      type = pair[1]
-    }
-  }
+locals {
+  # dns_record looks like "www CNAME d123.cloudfront.net" (apex: " CNAME d123...").
+  amplify_target = split(" ", one([
+    for s in aws_amplify_domain_association.site.sub_domain : s.dns_record if s.prefix == ""
+  ]))[2]
+}
 
-  zone_id = data.aws_route53_zone.this.zone_id
-  name    = each.value.name
-  type    = each.value.type
+# Amplify writes the same records itself when the zone is in this account;
+# keeping them here puts DNS in code and adds IPv6 (Amplify creates A only).
+resource "aws_route53_record" "apex" {
+  for_each = toset(["A", "AAAA"])
+
+  zone_id         = data.aws_route53_zone.this.zone_id
+  name            = local.domain
+  type            = each.key
+  allow_overwrite = true
 
   alias {
-    name                   = aws_cloudfront_distribution.site.domain_name
-    zone_id                = aws_cloudfront_distribution.site.hosted_zone_id
+    name                   = local.amplify_target
+    zone_id                = local.cloudfront_zone_id
     evaluate_target_health = false
   }
 }
 
+resource "aws_route53_record" "www" {
+  zone_id         = data.aws_route53_zone.this.zone_id
+  name            = "www.${local.domain}"
+  type            = "CNAME"
+  ttl             = 300
+  records         = [local.amplify_target]
+  allow_overwrite = true
+}
+
 # --- Deploy wiring for CI ---
 
-resource "aws_ssm_parameter" "distribution_id" {
-  name  = "/kovalov-in/prod/site/distribution-id"
+resource "aws_ssm_parameter" "app_id" {
+  name  = "/kovalov-in/prod/site/amplify-app-id"
   type  = "String"
-  value = aws_cloudfront_distribution.site.id
+  value = aws_amplify_app.site.id
 }
 
 resource "aws_ssm_parameter" "bucket" {
@@ -408,34 +386,34 @@ data "aws_iam_policy_document" "deploy_trust" {
 
 resource "aws_iam_role" "deploy" {
   name                 = "gha-deploy-site-prod"
-  description          = "GitHub Actions: upload site build and invalidate CloudFront"
+  description          = "GitHub Actions: publish a site release to Amplify, or roll back"
   assume_role_policy   = data.aws_iam_policy_document.deploy_trust.json
   max_session_duration = 3600
 }
 
 data "aws_iam_policy_document" "deploy" {
   statement {
-    sid       = "SyncSiteBucket"
-    actions   = ["s3:ListBucket"]
-    resources = [aws_s3_bucket.site.arn]
+    sid       = "PublishRelease"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.site.arn}/${local.release_key}"]
   }
 
   statement {
-    sid       = "WriteSiteObjects"
-    actions   = ["s3:PutObject", "s3:DeleteObject"]
-    resources = ["${aws_s3_bucket.site.arn}/*"]
+    sid       = "ReadReleaseHistory"
+    actions   = ["s3:GetObjectVersion", "s3:ListBucketVersions"]
+    resources = [aws_s3_bucket.site.arn, "${aws_s3_bucket.site.arn}/${local.release_key}"]
   }
 
   statement {
-    sid       = "InvalidateCache"
-    actions   = ["cloudfront:CreateInvalidation", "cloudfront:GetInvalidation"]
-    resources = [aws_cloudfront_distribution.site.arn]
+    sid       = "DeployToAmplify"
+    actions   = ["amplify:StartDeployment", "amplify:GetJob", "amplify:ListJobs"]
+    resources = [aws_amplify_branch.main.arn, "${aws_amplify_branch.main.arn}/jobs/*"]
   }
 
   statement {
     sid       = "ReadDeployParameters"
     actions   = ["ssm:GetParameter"]
-    resources = [aws_ssm_parameter.distribution_id.arn, aws_ssm_parameter.bucket.arn]
+    resources = [aws_ssm_parameter.app_id.arn, aws_ssm_parameter.bucket.arn]
   }
 }
 
@@ -449,8 +427,8 @@ output "bucket" {
   value = aws_s3_bucket.site.id
 }
 
-output "distribution_id" {
-  value = aws_cloudfront_distribution.site.id
+output "amplify_app_id" {
+  value = aws_amplify_app.site.id
 }
 
 output "deploy_role_arn" {

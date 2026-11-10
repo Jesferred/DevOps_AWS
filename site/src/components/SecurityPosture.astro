@@ -1,0 +1,74 @@
+---
+// Grades come from weekly third-party scans run by the monitoring aggregator
+// (SSL Labs, Mozilla HTTP Observatory, hstspreload.org, DNS over HTTPS).
+// Each tile links to the public report so anyone can verify it.
+const tile = 'flex flex-col justify-between rounded-xl border border-line bg-surface p-6';
+---
+
+<section id="security" class="scroll-mt-20 py-12" data-security-root>
+  <div class="flex flex-wrap items-baseline justify-between gap-4">
+    <h2 class="text-2xl font-semibold tracking-tight">Security posture</h2>
+    <p class="font-mono text-xs text-muted">scanned weekly · <span data-live="security.checked_at" data-fmt="ago">—</span></p>
+  </div>
+
+  <div class="mt-6 grid gap-4 md:grid-cols-3">
+    <a class={tile} href="https://www.ssllabs.com/ssltest/analyze.html?d=kovalov.in" data-href="security.ssl_labs.report_url">
+      <div>
+        <p class="text-sm text-muted">Qualys SSL Labs</p>
+        <p class="grade mt-2" data-live="security.ssl_labs.grade" data-fmt="text" data-check="security.ssl_labs.grade" data-pass="A+,A">—</p>
+      </div>
+      <p class="mt-4 font-mono text-xs text-muted">TLS configuration · certificate · protocols →</p>
+    </a>
+
+    <a class={tile} href="https://developer.mozilla.org/en-US/observatory/analyze?host=kovalov.in" data-href="security.observatory.report_url">
+      <div>
+        <p class="text-sm text-muted">Mozilla HTTP Observatory</p>
+        <p class="grade mt-2" data-live="security.observatory.grade" data-fmt="text" data-check="security.observatory.grade" data-pass="A+,A">—</p>
+      </div>
+      <p class="mt-4 font-mono text-xs text-muted">
+        score <span data-live="security.observatory.score">—</span> ·
+        <span data-live="security.observatory.tests_passed">—</span>/<span data-live="security.observatory.tests_total">—</span> tests · HTTP headers →
+      </p>
+    </a>
+
+    <a class={tile} href="https://hstspreload.org/?domain=kovalov.in">
+      <div>
+        <p class="text-sm text-muted">HSTS preload list</p>
+        <p class="mt-3 text-3xl font-semibold" data-live="security.hsts_preload" data-fmt="text">—</p>
+      </div>
+      <p class="mt-4 font-mono text-xs text-muted">browsers refuse plain HTTP before the first request →</p>
+    </a>
+  </div>
+
+  <ul class="mt-4 flex flex-wrap gap-2" aria-label="Security controls">
+    <li class="check" data-check="security.ssl_labs.protocols" data-state="unknown">TLS 1.2+ only</li>
+    <li class="check" data-state="pass">Strict CSP, no inline code</li>
+    <li class="check" data-state="pass">Own ACM certificate, ECDSA P-256</li>
+    <li class="check" data-check="security.caa">CAA: only Amazon may issue certs</li>
+    <li class="check" data-check="security.dmarc_policy" data-pass="quarantine,reject">DMARC enforced</li>
+    <li class="check" data-check="security.dnssec">DNSSEC</li>
+    <li class="check" data-state="pass"><a href="/.well-known/security.txt" class="underline underline-offset-4">security.txt</a></li>
+    <li class="check" data-state="pass">Keyless CI (OIDC)</li>
+  </ul>
+</section>
+
+<script>
+  import { fill, fillStates, loadStatus } from '../scripts/live';
+
+  const root = document.querySelector<HTMLElement>('[data-security-root]');
+  if (root) {
+    loadStatus().then((s) => {
+      if (!s?.security) return;
+      fill(root, s);
+      fillStates(root, s);
+      // "TLS 1.2+ only": no SSL 3 / TLS 1.0 / TLS 1.1 among the offered protocols.
+      const protocols = s.security.ssl_labs?.protocols;
+      const tls = root.querySelector<HTMLElement>('[data-check="security.ssl_labs.protocols"]');
+      if (tls && protocols) {
+        const legacy = protocols.some((p) => /SSL|TLS 1\.[01]$/.test(p));
+        tls.dataset.state = legacy ? 'fail' : 'pass';
+        if (protocols.includes('TLS 1.3')) tls.textContent = 'TLS 1.3 + 1.2 only';
+      }
+    });
+  }
+</script>

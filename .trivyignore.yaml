@@ -1,0 +1,49 @@
+# Accepted risks for `trivy config`. Every entry states why it is accepted;
+# anything not listed here fails CI at HIGH/CRITICAL. Reviewed 2026-11-06.
+misconfigurations:
+  # --- Customer-managed KMS keys -------------------------------------------
+  # Data is encrypted at rest with AWS-owned/managed keys (SSE-S3, DynamoDB
+  # default, CloudWatch Logs default). A CMK adds key-policy control and
+  # CloudTrail key usage logs at $1/month per key, more than the whole
+  # project's monthly bill. Revisit if the project stores personal data.
+  - id: AWS-0132 # S3 SSE with CMK
+    statement: SSE-S3 is sufficient for public site assets and Terraform state; CMK cost not justified.
+  - id: AWS-0017 # CloudWatch log groups with CMK
+    statement: Logs contain probe timings only; default CloudWatch Logs encryption applies.
+  - id: AWS-0025 # DynamoDB with CMK
+    statement: Table holds public monitoring data; encrypted with the AWS-owned key by default.
+
+  # --- SNS encryption --------------------------------------------------------
+  - id: AWS-0095
+    paths:
+      - "live/global/alerting/main.tf"
+    statement: >-
+      CloudWatch alarms and AWS Budgets cannot publish to a topic encrypted with
+      the AWS-managed SNS key; encryption would require a $1/month CMK. Alert
+      payloads contain no secrets.
+
+  # --- Public live data -----------------------------------------------------
+  - id: AWS-0087 # block_public_policy disabled
+    paths:
+      - "live/prod/site/main.tf"
+    statement: >-
+      The bucket policy grants public read on live/* only: monitoring JSON that
+      the site displays anyway. ACLs remain blocked; releases/ stays private.
+  - id: AWS-0093 # restrict_public_buckets disabled
+    paths:
+      - "live/prod/site/main.tf"
+    statement: Same as AWS-0087; required for the live/* public-read statement to take effect.
+
+  # --- Access logging --------------------------------------------------------
+  - id: AWS-0089 # S3 server access logs
+    statement: >-
+      Writes to both buckets come only from CI roles and the aggregator, all
+      recorded by CloudTrail; reads of public live/* data need no audit trail.
+
+  # --- Tracing ---------------------------------------------------------------
+  - id: AWS-0066 # Lambda X-Ray
+    paths:
+      - "modules/prober/main.tf"
+    statement: >-
+      Probers run 130k times a month, beyond the X-Ray free tier; each run is a
+      single HTTPS request already timed phase by phase. The aggregator is traced.
