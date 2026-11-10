@@ -60,8 +60,15 @@ function bindTip(mark: SVGElement, content: () => [string, TipRow[]]): void {
   mark.addEventListener('blur', hideTip);
 }
 
-/** Re-render on container resize so text stays at its real pixel size. */
+const observers = new WeakMap<HTMLElement, ResizeObserver>();
+
+/**
+ * Re-render on container resize so text stays at its real pixel size.
+ * Drawing into the same container again (new data, another range) replaces
+ * the previous observer instead of stacking a second one on top.
+ */
 function responsive(container: HTMLElement, draw: (width: number) => void): void {
+  observers.get(container)?.disconnect();
   let last = 0;
   const run = () => {
     const w = Math.floor(container.clientWidth);
@@ -70,7 +77,9 @@ function responsive(container: HTMLElement, draw: (width: number) => void): void
       draw(w);
     }
   };
-  new ResizeObserver(run).observe(container);
+  const ro = new ResizeObserver(run);
+  ro.observe(container);
+  observers.set(container, ro);
   run();
 }
 
@@ -95,10 +104,13 @@ function niceMax(v: number): number {
 
 // --- sparkline (stat tiles) ------------------------------------------------
 
-export function sparkline(el: SVGSVGElement, values: (number | null)[]): void {
+/** Trend line from the first sample on; hidden until there is a trend to show. */
+export function sparkline(el: SVGSVGElement, series: (number | null)[], minPoints = 4): void {
+  const start = series.findIndex((v) => v !== null);
+  const values = start < 0 ? [] : series.slice(start);
   const pts = values.map((v, i) => [i, v] as const).filter((p): p is readonly [number, number] => p[1] !== null);
   el.replaceChildren();
-  if (pts.length < 2) return;
+  if (pts.length < minPoints) return;
   const [lo, hi] = [Math.min(...pts.map((p) => p[1])), Math.max(...pts.map((p) => p[1]))];
   const span = hi - lo || 1;
   const n = values.length - 1 || 1;
@@ -175,11 +187,18 @@ export function uptimeStrip(container: HTMLElement, days: Day[], target: number,
 // --- line chart with crosshair (daily p95 latency) ------------------------
 
 export interface Point {
+  /** Short axis label, e.g. "11-10" or "18:00". */
   label: string;
+  /** Tooltip heading; defaults to the label. */
+  title?: string;
   value: number | null;
 }
 
-export function lineChart(container: HTMLElement, points: Point[], opts: { unit: string; name: string }): void {
+export function lineChart(
+  container: HTMLElement,
+  points: Point[],
+  opts: { unit: string; name: string; axis?: [string, string] },
+): void {
   responsive(container, (width) => {
     const height = 200;
     const pad = { top: 12, right: 12, bottom: 24, left: 44 };
@@ -204,7 +223,7 @@ export function lineChart(container: HTMLElement, points: Point[], opts: { unit:
     if (points.length) {
       for (const [i, anchor] of [[0, 'start'], [points.length - 1, 'end']] as const) {
         const lbl = svg('text', { x: x(i), y: height - 6, 'text-anchor': anchor, class: 'chart-axis' });
-        lbl.textContent = points[i].label;
+        lbl.textContent = opts.axis ? opts.axis[i ? 1 : 0] : points[i].label;
         root.append(lbl);
       }
     }
@@ -227,8 +246,14 @@ export function lineChart(container: HTMLElement, points: Point[], opts: { unit:
         root.append(svg('path', { d: `${d}L${x(lastIdx)},${y(0)}L${x(firstIdx)},${y(0)}Z`, class: 'chart-area' }));
       }
       root.append(svg('path', { d, class: 'chart-line' }));
-      const last = points[lastIdx];
-      root.append(svg('circle', { cx: x(lastIdx), cy: y(last.value!), r: 4, class: 'chart-dot' }));
+      // A point with no neighbours draws no line, so give it a marker; the
+      // latest point always gets one.
+      const has = (i: number) => points[i]?.value != null;
+      points.forEach((p, i) => {
+        if (p.value !== null && (i === lastIdx || (!has(i - 1) && !has(i + 1)))) {
+          root.append(svg('circle', { cx: x(i), cy: y(p.value), r: 4, class: 'chart-dot' }));
+        }
+      });
     }
 
     // Crosshair: snaps to the nearest day; whole plot is the hit target.
@@ -251,7 +276,7 @@ export function lineChart(container: HTMLElement, points: Point[], opts: { unit:
       } else {
         dot.setAttribute('visibility', 'hidden');
       }
-      showTip(clientX, clientY, p.label, [{ value: p.value === null ? 'No data' : `${p.value} ${opts.unit}`, label: opts.name }]);
+      showTip(clientX, clientY, p.title ?? p.label, [{ value: p.value === null ? 'No data' : `${p.value} ${opts.unit}`, label: opts.name }]);
     };
     const clear = () => {
       cross.setAttribute('visibility', 'hidden');

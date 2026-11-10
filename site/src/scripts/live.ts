@@ -22,6 +22,8 @@ export interface Status {
     recent: { start: string; end: string | null; duration_min: number }[];
   };
   daily: { date: string; availability: number | null; bad_min: number; p95_ms: number | null }[];
+  /** Last 24 hours, oldest first; absent in documents written before it existed. */
+  hourly?: { start: string; availability: number | null; p50_ms: number | null; p95_ms: number | null }[];
   cost: {
     month: string;
     month_to_date: number;
@@ -77,7 +79,12 @@ export function health(s: Status | null): Health {
 }
 
 export const fmt = {
-  pct: (v: number | null | undefined, digits = 3) => (v == null ? '—' : `${(v * 100).toFixed(digits)}%`),
+  pct: (v: number | null | undefined, digits = 3) => {
+    if (v == null) return '—';
+    const floor = 10 ** -digits;
+    // A real but tiny share must not read as zero ("0.0%" on the first day of data).
+    return v > 0 && v * 100 < floor ? `<${floor.toFixed(digits)}%` : `${(v * 100).toFixed(digits)}%`;
+  },
   ms: (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v)} ms`),
   usd: (v: number | null | undefined) => (v == null ? '—' : `$${v.toFixed(2)}`),
   min: (v: number | null | undefined) => (v == null ? '—' : `${v.toFixed(1)} min`),
@@ -104,10 +111,20 @@ function pick(obj: unknown, path: string): unknown {
   return path.split('.').reduce<unknown>((o, k) => (o == null ? undefined : (o as Record<string, unknown>)[k]), obj);
 }
 
-/** Fill every <el data-live="path" data-fmt="pct|ms|..."> under root. */
+/**
+ * Fill every <el data-live="path" data-fmt="pct|ms|..."> under root.
+ * data-empty="text" replaces the dash when the value is missing for a known
+ * reason (no incidents yet, no forecast yet), so a gap never looks like a bug.
+ */
 export function fill(root: ParentNode, s: Status): void {
   root.querySelectorAll<HTMLElement>('[data-live]').forEach((el) => {
     const value = pick(s, el.dataset.live!);
+    if (value == null && el.dataset.empty) {
+      el.textContent = el.dataset.empty;
+      el.dataset.missing = '';
+      return;
+    }
+    delete el.dataset.missing;
     const f = fmt[(el.dataset.fmt ?? 'int') as keyof typeof fmt] as (v: unknown, digits?: number) => string;
     el.textContent = el.dataset.digits ? f(value, Number(el.dataset.digits)) : f(value);
   });
@@ -127,7 +144,7 @@ export function fillStates(root: ParentNode, s: Status): void {
   root.querySelectorAll<HTMLElement>('[data-level]').forEach((el) => {
     const v = pick(s, el.dataset.level!) as string | null | undefined;
     el.dataset.state = v ?? 'unknown';
-    el.textContent = v ?? '—';
+    el.textContent = v ?? el.dataset.empty ?? '—';
   });
   root.querySelectorAll<HTMLAnchorElement>('a[data-href]').forEach((a) => {
     const href = pick(s, a.dataset.href!);

@@ -271,6 +271,15 @@ def build_status(now: int) -> tuple[dict, dict]:
         "security": _plain({k: v for k, v in posture.items() if k not in ("pk", "sk")}) if posture else None,
         "dora": {**dora_metrics, "recent": recent_deploys},
         "probes_5m": sum(1 for i in items if i["ts"] >= now - 300),
+        "hourly": [
+            {
+                "start": _iso(h["start"]),
+                "availability": _round(h["availability"], 6),
+                "p50_ms": _round(h["p50_ms"], 0),
+                "p95_ms": _round(h["p95_ms"], 0),
+            }
+            for h in slo.hourly(_to_probes(items), now)
+        ],
     }
     return doc, alerts
 
@@ -313,12 +322,16 @@ def update_cost() -> dict:
         Filter=usage_only,
     )
     groups = [g for r in resp["ResultsByTime"] for g in r["Groups"]]
+    all_services = [
+        {"service": g["Keys"][0], "amount": round(float(g["Metrics"]["UnblendedCost"]["Amount"]), 4)} for g in groups
+    ]
+    # Free-tier services report $0.00; listing them only adds noise.
     by_service = sorted(
-        ({"service": g["Keys"][0], "amount": round(float(g["Metrics"]["UnblendedCost"]["Amount"]), 4)} for g in groups),
+        (s for s in all_services if s["amount"] >= 0.005),
         key=lambda s: s["amount"],
         reverse=True,
     )
-    mtd = round(sum(s["amount"] for s in by_service), 4)
+    mtd = round(sum(s["amount"] for s in all_services), 4)
 
     forecast = None
     if today + timedelta(days=1) < next_month:

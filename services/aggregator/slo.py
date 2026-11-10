@@ -163,3 +163,27 @@ def mttr_minutes(incidents: Sequence[Incident]) -> float | None:
     if not resolved:
         return None
     return sum(i.end - i.start for i in resolved) / len(resolved) / 60
+
+
+def hourly(probes: Sequence[Probe], now: int, hours: int = 24) -> list[dict]:
+    """Per-hour series for the last `hours` whole hours plus the current one.
+
+    Each bucket: start (unix s), p50/p95 of successful probe latency, and
+    availability over the evaluated minutes in that hour (None without data),
+    so short-window charts work from the first hour instead of the first day.
+    """
+    current = now - now % 3600
+    starts = [current - (hours - 1 - i) * 3600 for i in range(hours)]
+    status = minute_status(probes)
+    out = []
+    for start in starts:
+        end = start + 3600
+        lat = [p.total_ms for p in probes if start <= p.ts < end and p.ok and p.total_ms is not None]
+        evaluated, bad = count_minutes(status, start, end)
+        out.append({
+            "start": start,
+            "p50_ms": percentile(lat, 0.5),
+            "p95_ms": percentile(lat, 0.95),
+            "availability": availability(evaluated, bad),
+        })
+    return out
